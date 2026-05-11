@@ -1,0 +1,179 @@
+import XCTest
+
+final class MarkdownRendererTests: XCTestCase {
+    func testRendersCommonMarkdownElements() {
+        let markdown = """
+        # Title
+
+        A paragraph with **strong text** and `inline code`.
+
+        - One
+        - Two
+
+        | Name | Value |
+        | --- | --- |
+        | A | 1 |
+
+        ```swift
+        print("hello")
+        ```
+        """
+
+        let result = MarkdownRenderer.render(markdown: markdown, title: "Doc")
+
+        XCTAssertTrue(result.html.contains("<h1>Title</h1>"))
+        XCTAssertTrue(result.html.contains("<strong>strong text</strong>"))
+        XCTAssertTrue(result.html.contains("<code>inline code</code>"))
+        XCTAssertTrue(result.html.contains("<li>"))
+        XCTAssertTrue(result.html.contains("One"))
+        XCTAssertTrue(result.html.contains("<table>"))
+        XCTAssertTrue(result.html.contains("print"))
+    }
+
+    func testUsesPlainDocumentChrome() {
+        let result = MarkdownRenderer.render(markdown: "# Plain", title: "Plain")
+
+        XCTAssertFalse(result.html.contains("box-shadow"))
+        XCTAssertFalse(result.html.contains("border-radius: 8px"))
+        XCTAssertFalse(result.html.contains("color-mix"))
+        XCTAssertFalse(result.html.contains("#176b62"))
+        XCTAssertTrue(result.html.contains("background: #ffffff;"))
+        XCTAssertTrue(result.html.contains("color: #111111;"))
+    }
+
+    func testRendersDarkAppearanceWhenRequested() {
+        let result = MarkdownRenderer.render(markdown: "# Dark", title: "Dark", appearance: .dark)
+
+        XCTAssertTrue(result.html.contains("color-scheme: dark;"))
+        XCTAssertTrue(result.html.contains("background: #111111;"))
+        XCTAssertTrue(result.html.contains("color: #f5f5f5;"))
+    }
+
+    func testRendersSystemAppearanceWhenRequested() {
+        let result = MarkdownRenderer.render(markdown: "# System", title: "System", appearance: .system)
+
+        XCTAssertTrue(result.html.contains("color-scheme: light dark;"))
+        XCTAssertTrue(result.html.contains("@media (prefers-color-scheme: dark)"))
+    }
+
+    func testCanRethemeExistingBodyWithoutChangingRenderedMarkdown() {
+        let light = MarkdownRenderer.render(markdown: "# Title\n\nBody", title: "Doc", appearance: .light)
+        let dark = MarkdownRenderer.wrapHTML(title: light.title, bodyHTML: light.bodyHTML, appearance: .dark)
+
+        XCTAssertEqual(light.bodyHTML, dark.bodyHTML)
+        XCTAssertTrue(dark.html.contains("color-scheme: dark;"))
+        XCTAssertTrue(dark.html.contains("<h1>Title</h1>"))
+    }
+
+    func testSanitizesScriptAndJavaScriptLinks() {
+        let markdown = """
+        <script>alert("x")</script>
+
+        [bad](javascript:alert(1))
+        """
+
+        let result = MarkdownRenderer.render(markdown: markdown, title: "Unsafe")
+
+        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("<script"))
+        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("javascript:"))
+    }
+
+    func testSanitizesRawHTMLRemoteResources() {
+        let markdown = """
+        <img src='https://example.com/tracker.png'>
+        <link href=https://example.com/site.css rel=stylesheet>
+        <a href="file:///etc/passwd">local file</a>
+        <a href=javascript:alert(1)>script link</a>
+        <img src="data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+">
+        <span style="background:url(https://example.com/bg.png)">bad</span>
+        """
+
+        let result = MarkdownRenderer.render(markdown: markdown, title: "Unsafe HTML")
+
+        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("https://example.com"))
+        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("file:///"))
+        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("javascript:"))
+        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("data:image/svg"))
+        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("<link"))
+        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("style="))
+    }
+
+    func testDoesNotEmbedSymlinkEscapingDocumentDirectory() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let docDirectory = root.appendingPathComponent("doc", isDirectory: true)
+        let outsideDirectory = root.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: docDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
+
+        let outsideImage = outsideDirectory.appendingPathComponent("secret.png")
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: outsideImage)
+        let symlink = docDirectory.appendingPathComponent("leak.png")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: outsideImage)
+
+        let result = MarkdownRenderer.render(markdown: "![leak](leak.png)", title: "Image", baseURL: docDirectory)
+
+        XCTAssertFalse(result.html.contains("src=\"data:image/png;base64,"))
+    }
+
+    func testEscapesErrorHTML() {
+        let result = MarkdownRenderer.renderError(title: "<bad>", message: "<script>alert(1)</script>")
+
+        XCTAssertTrue(result.html.contains("&lt;bad&gt;"))
+        XCTAssertTrue(result.html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"))
+        XCTAssertFalse(result.html.contains("<bad>"))
+    }
+
+    func testEmbedsRelativeImageAsDataURI() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let imageURL = directory.appendingPathComponent("dot.png")
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: imageURL)
+
+        let result = MarkdownRenderer.render(markdown: "![dot](dot.png)", title: "Image", baseURL: directory)
+
+        XCTAssertTrue(result.html.contains("src=\"data:image/png;base64,"))
+    }
+
+    func testDoesNotEmbedRelativeSVGAsDataURI() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let imageURL = directory.appendingPathComponent("active.svg")
+        try "<svg onload=\"alert(1)\"></svg>".data(using: .utf8)!.write(to: imageURL)
+
+        let result = MarkdownRenderer.render(markdown: "![active](active.svg)", title: "Image", baseURL: directory)
+
+        XCTAssertFalse(result.html.contains("data:image/svg+xml"))
+    }
+
+    func testStopsEmbeddingImagesAfterAggregateLimit() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let imageData = Data(repeating: 0x41, count: 4 * 1024 * 1024)
+        for index in 1...4 {
+            try imageData.write(to: directory.appendingPathComponent("image-\(index).png"))
+        }
+
+        let markdown = (1...4)
+            .map { "![image-\($0)](image-\($0).png)" }
+            .joined(separator: "\n")
+
+        let result = MarkdownRenderer.render(markdown: markdown, title: "Images", baseURL: directory)
+        let embeddedImageCount = result.html.components(separatedBy: "src=\"data:image/png;base64,").count - 1
+
+        XCTAssertEqual(embeddedImageCount, 3)
+    }
+
+    func testStripsRemoteImageSources() {
+        let result = MarkdownRenderer.render(
+            markdown: "![tracking](https://example.com/pixel.png)",
+            title: "Remote Image",
+            baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
+        )
+
+        XCTAssertFalse(result.html.contains("https://example.com/pixel.png"))
+    }
+}
