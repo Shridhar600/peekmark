@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+dist/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcresult
+*.dSYM/
+*.app
+*.appex
+*.zip
+.worktrees/
+docs/
