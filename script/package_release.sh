@@ -12,9 +12,21 @@ export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
 
 verify_clean_entitlements() {
   local target="$1"
+  local allow_network="${2:-false}"
+  local require_network="${3:-false}"
   local entitlements
   entitlements="$(codesign -d --entitlements - "$target" 2>/dev/null)"
-  if echo "$entitlements" | grep -E "com.apple.security.network.client|temporary-exception.files.absolute-path" >/dev/null; then
+  if [[ "$allow_network" != "true" ]] && echo "$entitlements" | grep "com.apple.security.network.client" >/dev/null; then
+    echo "Refusing to package: forbidden entitlement found in $target" >&2
+    echo "$entitlements" >&2
+    exit 1
+  fi
+  if [[ "$require_network" == "true" ]] && ! echo "$entitlements" | grep -q "com.apple.security.network.client"; then
+    echo "Refusing to package: missing required network client entitlement in $target" >&2
+    echo "$entitlements" >&2
+    exit 1
+  fi
+  if echo "$entitlements" | grep "temporary-exception.files.absolute-path" >/dev/null; then
     echo "Refusing to package: forbidden entitlement found in $target" >&2
     echo "$entitlements" >&2
     exit 1
@@ -30,7 +42,7 @@ xcodebuild \
   -derivedDataPath "$DERIVED_DATA_DIR" \
   clean build
 
-verify_clean_entitlements "$APP_PATH"
+verify_clean_entitlements "$APP_PATH" true true
 verify_clean_entitlements "$APP_PATH/Contents/PlugIns/PeekMarkQuickLookExtension.appex"
 
 if [[ ! -f "$APP_PATH/Contents/Resources/Assets.car" ]]; then

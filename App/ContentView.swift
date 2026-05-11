@@ -9,38 +9,33 @@ struct ContentView: View {
     @AppStorage("markdownAppearance") private var appearance = MarkdownAppearance.system
 
     var body: some View {
-        ZStack {
-            if renderedDocument.isEmpty {
-                EmptyStateView()
-                    .transition(.opacity)
-            } else {
-                MarkdownPreviewView(html: renderedDocument.html)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity)
-            }
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
-        .frame(minWidth: 620, idealWidth: 860, minHeight: 480, idealHeight: 720)
-        .navigationTitle(renderedDocument.title)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: openDocument) {
-                    Label("Open Markdown", systemImage: "doc.badge.plus")
+        contentView
+            .frame(minWidth: 620, idealWidth: 860, minHeight: 480, idealHeight: 720)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .toolbar {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    OpenFileButton(action: openDocument)
+                    AppearanceToolbarPicker(appearance: $appearance)
                 }
-                .help("Open Markdown")
-
-                AppearanceToolbarPicker(appearance: $appearance)
             }
-        }
-        .onAppear(perform: loadOpenedFile)
-        .onChange(of: openedFile) {
-            loadOpenedFile()
-        }
-        .onChange(of: appearance) {
-            renderedDocument = renderedDocument.withAppearance(appearance)
-        }
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            loadDroppedFile(from: providers)
+            .onAppear(perform: loadOpenedFile)
+            .onChange(of: openedFile) {
+                loadOpenedFile()
+            }
+            .onChange(of: appearance) {
+                renderedDocument = renderedDocument.withAppearance(appearance)
+            }
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                loadDroppedFile(from: providers)
+            }
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if renderedDocument.isEmpty {
+            EmptyStateView()
+        } else {
+            MarkdownPreviewView(html: renderedDocument.html)
         }
     }
 
@@ -71,23 +66,79 @@ struct ContentView: View {
     }
 }
 
+private struct OpenFileButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "doc.badge.plus")
+                    .font(.system(size: 13, weight: .medium))
+                Text("Open")
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Open Markdown")
+    }
+}
+
 private struct AppearanceToolbarPicker: View {
     @Binding var appearance: MarkdownAppearance
 
     var body: some View {
-        Picker("Appearance", selection: $appearance) {
-            Label("System", systemImage: "circle.lefthalf.filled")
-                .tag(MarkdownAppearance.system)
-            Label("Light", systemImage: "sun.max.fill")
-                .tag(MarkdownAppearance.light)
-            Label("Dark", systemImage: "moon.fill")
-                .tag(MarkdownAppearance.dark)
+        HStack(spacing: 0) {
+            ForEach(Array(MarkdownAppearance.allCases.enumerated()), id: \.element.id) { index, mode in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        appearance = mode
+                    }
+                } label: {
+                    Image(systemName: mode.symbolName)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(appearance == mode ? Color.primary : Color.secondary)
+                        .frame(width: 30, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(mode.accessibilityLabel)
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        appearance = mode
+                    }
+                }
+            }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
-        .frame(width: 126)
-        .help("Preview Appearance")
+        .padding(.horizontal, 6)
+        .background(
+            Capsule()
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+    }
+}
+
+extension MarkdownAppearance {
+    var symbolName: String {
+        switch self {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max"
+        case .dark: return "moon.fill"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .system: return "System appearance"
+        case .light: return "Light mode"
+        case .dark: return "dark mode"
+        }
     }
 }
 
