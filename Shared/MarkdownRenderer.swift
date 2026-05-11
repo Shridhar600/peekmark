@@ -99,29 +99,34 @@ private enum LocalImageDataURIRewriter {
             return html
         }
 
-        var output = ""
+        var chunks: [String] = []
+        chunks.reserveCapacity(matches.count * 2 + 1)
         var cursor = 0
         var embeddedBytes = 0
         for match in matches {
-            output += nsHTML.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+            chunks.append(nsHTML.substring(with: NSRange(location: cursor, length: match.range.location - cursor)))
             let prefix = nsHTML.substring(with: match.range(at: 1))
             let source = nsHTML.substring(with: match.range(at: 2))
             let suffix = nsHTML.substring(with: match.range(at: 3))
             if let image = dataURI(for: source, baseDirectory: baseDirectory, byteLimit: byteLimit),
                embeddedBytes + image.byteCount <= aggregateByteLimit {
                 embeddedBytes += image.byteCount
-                output += "\(prefix)\(image.uri)\(suffix)"
+                chunks.append(prefix)
+                chunks.append(image.uri)
+                chunks.append(suffix)
             } else if resolvedURL(for: source, baseDirectory: baseDirectory) != nil {
-                output += "\(prefix)\(suffix)"
+                chunks.append(prefix)
+                chunks.append(suffix)
             } else if shouldStripImageSource(source) {
-                output += "\(prefix)\(suffix)"
+                chunks.append(prefix)
+                chunks.append(suffix)
             } else {
-                output += nsHTML.substring(with: match.range)
+                chunks.append(nsHTML.substring(with: match.range))
             }
             cursor = match.range.location + match.range.length
         }
-        output += nsHTML.substring(from: cursor)
-        return output
+        chunks.append(nsHTML.substring(from: cursor))
+        return chunks.joined()
     }
 
     private static func dataURI(for source: String, baseDirectory: URL, byteLimit: Int) -> (uri: String, byteCount: Int)? {
