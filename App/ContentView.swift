@@ -6,24 +6,31 @@ struct ContentView: View {
     let openDocument: () -> Void
 
     @State private var renderedDocument = RenderedDocument.empty
+    @State private var renderGeneration = 0
     @AppStorage("markdownAppearance") private var appearance = MarkdownAppearance.system
 
     var body: some View {
         contentView
             .frame(minWidth: 620, idealWidth: 860, minHeight: 480, idealHeight: 720)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .navigationTitle(renderedDocument.title)
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
-                    OpenFileButton(action: openDocument)
-                    AppearanceToolbarPicker(appearance: $appearance)
+                    Button(action: openDocument) {
+                        Label("Open Markdown", systemImage: "doc.badge.plus")
+                    }
+                    .help("Open Markdown")
+
+                    AppearanceToolbarMenu(appearance: $appearance)
                 }
             }
+            .toolbar(removing: .title)
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             .onAppear(perform: loadOpenedFile)
             .onChange(of: openedFile) {
                 loadOpenedFile()
             }
             .onChange(of: appearance) {
-                renderedDocument = renderedDocument.withAppearance(appearance)
+                reloadForAppearanceChange()
             }
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 loadDroppedFile(from: providers)
@@ -40,11 +47,24 @@ struct ContentView: View {
     }
 
     private func loadOpenedFile() {
+        renderGeneration += 1
+        let generation = renderGeneration
+
         guard let openedFile else {
             renderedDocument = .empty
             return
         }
-        renderedDocument = RenderedDocument.load(from: openedFile, appearance: appearance)
+
+        let currentAppearance = appearance
+        Task.detached(priority: .userInitiated) {
+            let document = RenderedDocument.load(from: openedFile, appearance: currentAppearance)
+            await MainActor.run {
+                guard renderGeneration == generation else {
+                    return
+                }
+                renderedDocument = document
+            }
+        }
     }
 
     private func loadDroppedFile(from providers: [NSItemProvider]) -> Bool {
@@ -64,63 +84,33 @@ struct ContentView: View {
         }
         return true
     }
-}
 
-private struct OpenFileButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: "doc.badge.plus")
-                    .font(.system(size: 13, weight: .medium))
-                Text("Open")
-                    .font(.system(size: 13, weight: .medium))
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
+    private func reloadForAppearanceChange() {
+        guard openedFile != nil else {
+            renderGeneration += 1
+            renderedDocument = renderedDocument.withAppearance(appearance)
+            return
         }
-        .buttonStyle(.plain)
-        .help("Open Markdown")
+        loadOpenedFile()
     }
 }
 
-private struct AppearanceToolbarPicker: View {
+private struct AppearanceToolbarMenu: View {
     @Binding var appearance: MarkdownAppearance
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(MarkdownAppearance.allCases.enumerated()), id: \.element.id) { index, mode in
+        Menu {
+            ForEach(MarkdownAppearance.allCases) { mode in
                 Button {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        appearance = mode
-                    }
+                    appearance = mode
                 } label: {
-                    Image(systemName: mode.symbolName)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(appearance == mode ? Color.primary : Color.secondary)
-                        .frame(width: 30, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(mode.accessibilityLabel)
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        appearance = mode
-                    }
+                    Label(mode.accessibilityLabel, systemImage: appearance == mode ? "checkmark" : mode.symbolName)
                 }
             }
+        } label: {
+            Label("Preview Appearance", systemImage: appearance.symbolName)
         }
-        .padding(.horizontal, 6)
-        .background(
-            Capsule()
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
+        .help("Preview Appearance")
     }
 }
 
@@ -137,7 +127,7 @@ extension MarkdownAppearance {
         switch self {
         case .system: return "System appearance"
         case .light: return "Light mode"
-        case .dark: return "dark mode"
+        case .dark: return "Dark mode"
         }
     }
 }
@@ -176,14 +166,17 @@ private struct RenderedDocument {
 
     static func load(from url: URL, appearance: MarkdownAppearance = .light) -> RenderedDocument {
         let title = url.deletingPathExtension().lastPathComponent
+
         do {
-            let markdown = try MarkdownDocumentLoader.load(url: url)
-            let result = MarkdownRenderer.render(
-                markdown: markdown,
-                title: title,
-                baseURL: url.deletingLastPathComponent(),
-                appearance: appearance
-            )
+            let result = try MarkdownDocumentLoader.withSecurityScopedAccess(to: url) {
+                let markdown = try MarkdownDocumentLoader.load(url: url)
+                return MarkdownRenderer.render(
+                    markdown: markdown,
+                    title: title,
+                    baseURL: url.deletingLastPathComponent(),
+                    appearance: appearance
+                )
+            }
             return RenderedDocument(title: result.title, html: result.html, bodyHTML: result.bodyHTML)
         } catch {
             let result = MarkdownRenderer.renderError(

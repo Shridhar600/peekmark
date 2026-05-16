@@ -9,6 +9,7 @@ required_scripts=(
   "$ROOT_DIR/script/uninstall.sh"
   "$ROOT_DIR/script/verify_install.sh"
   "$ROOT_DIR/script/package_release.sh"
+  "$ROOT_DIR/Tests/openwith_ui_check.sh"
 )
 
 for script in "${required_scripts[@]}"; do
@@ -18,6 +19,8 @@ for script in "${required_scripts[@]}"; do
   fi
   zsh -n "$script"
 done
+
+"$ROOT_DIR/Tests/openwith_ui_check.sh"
 
 grep -q "ditto" "$ROOT_DIR/script/install.sh"
 grep -q "/Applications/PeekMark.app" "$ROOT_DIR/script/install.sh"

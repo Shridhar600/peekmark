@@ -3,14 +3,17 @@ import Foundation
 enum MarkdownDocumentLoader {
     static let defaultByteLimit = 8 * 1024 * 1024
 
-    static func load(url: URL, byteLimit: Int = defaultByteLimit) throws -> String {
+    static func withSecurityScopedAccess<T>(to url: URL, perform work: () throws -> T) rethrows -> T {
         let hasScopedAccess = url.startAccessingSecurityScopedResource()
         defer {
             if hasScopedAccess {
                 url.stopAccessingSecurityScopedResource()
             }
         }
+        return try work()
+    }
 
+    static func load(url: URL, byteLimit: Int = defaultByteLimit) throws -> String {
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
         if values.isRegularFile == false {
             throw PeekMarkError.notARegularFile
