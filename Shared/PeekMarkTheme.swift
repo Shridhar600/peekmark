@@ -99,23 +99,23 @@ enum PeekMarkTheme {
     * { box-sizing: border-box; }
 
     html {
-      background: \(background);
-      color: \(text);
+      background: var(--background);
+      color: var(--text);
       font: 16px/1.58 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
     }
 
     body {
       margin: 0;
       padding: 28px;
-      background: \(background);
+      background: var(--background);
     }
 
     main {
       max-width: 840px;
       margin: 0 auto;
       padding: 0;
-      background: \(background);
-      color: \(text);
+      background: var(--background);
+      color: var(--text);
     }
 
     h1, h2, h3, h4, h5, h6 {

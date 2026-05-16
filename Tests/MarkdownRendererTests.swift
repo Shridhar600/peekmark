@@ -37,23 +37,31 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(result.html.contains("border-radius: 8px"))
         XCTAssertFalse(result.html.contains("color-mix"))
         XCTAssertFalse(result.html.contains("#176b62"))
-        XCTAssertTrue(result.html.contains("background: #ffffff;"))
-        XCTAssertTrue(result.html.contains("color: #111111;"))
+        XCTAssertTrue(result.html.contains("--background: #ffffff;"))
+        XCTAssertTrue(result.html.contains("--text: #111111;"))
+        XCTAssertTrue(result.html.contains("background: var(--background);"))
+        XCTAssertTrue(result.html.contains("color: var(--text);"))
     }
 
     func testRendersDarkAppearanceWhenRequested() {
         let result = MarkdownRenderer.render(markdown: "# Dark", title: "Dark", appearance: .dark)
 
         XCTAssertTrue(result.html.contains("color-scheme: dark;"))
-        XCTAssertTrue(result.html.contains("background: #111111;"))
-        XCTAssertTrue(result.html.contains("color: #f5f5f5;"))
+        XCTAssertTrue(result.html.contains("--background: #111111;"))
+        XCTAssertTrue(result.html.contains("--text: #f5f5f5;"))
+        XCTAssertTrue(result.html.contains("background: var(--background);"))
+        XCTAssertTrue(result.html.contains("color: var(--text);"))
     }
 
     func testRendersSystemAppearanceWhenRequested() {
         let result = MarkdownRenderer.render(markdown: "# System", title: "System", appearance: .system)
+        let normalizedHTML = result.html.normalizedWhitespace
 
         XCTAssertTrue(result.html.contains("color-scheme: light dark;"))
         XCTAssertTrue(result.html.contains("@media (prefers-color-scheme: dark)"))
+        XCTAssertTrue(normalizedHTML.contains("html { background: var(--background); color: var(--text);"))
+        XCTAssertTrue(normalizedHTML.contains("body { margin: 0; padding: 28px; background: var(--background);"))
+        XCTAssertTrue(normalizedHTML.contains("main { max-width: 840px; margin: 0 auto; padding: 0; background: var(--background); color: var(--text);"))
     }
 
     func testCanRethemeExistingBodyWithoutChangingRenderedMarkdown() {
@@ -175,5 +183,13 @@ final class MarkdownRendererTests: XCTestCase {
         )
 
         XCTAssertFalse(result.html.contains("https://example.com/pixel.png"))
+    }
+}
+
+private extension String {
+    var normalizedWhitespace: String {
+        components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 }

@@ -8,12 +8,14 @@ final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         let result: MarkdownRenderResult
 
         do {
-            let markdown = try MarkdownDocumentLoader.load(url: request.fileURL)
-            result = MarkdownRenderer.render(
-                markdown: markdown,
-                title: title,
-                baseURL: request.fileURL.deletingLastPathComponent()
-            )
+            result = try MarkdownDocumentLoader.withSecurityScopedAccess(to: request.fileURL) {
+                let markdown = try MarkdownDocumentLoader.load(url: request.fileURL)
+                return MarkdownRenderer.render(
+                    markdown: markdown,
+                    title: title,
+                    baseURL: request.fileURL.deletingLastPathComponent()
+                )
+            }
         } catch {
             result = MarkdownRenderer.renderError(
                 title: title,

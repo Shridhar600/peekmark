@@ -53,6 +53,7 @@ struct PeekMarkApp: App {
                     openedFile = url
                 }
         }
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) { }
