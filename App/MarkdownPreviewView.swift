@@ -31,6 +31,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
         webView.loadHTMLString(html, baseURL: nil)
     }
 
+    @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate {
         var lastHTML = ""
         var allowNextMainFrameLoad = false
