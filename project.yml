@@ -71,3 +71,10 @@ schemes:
     test:
       targets:
         - PeekMarkTests
+  PeekMarkTests:
+    build:
+      targets:
+        PeekMarkTests: all
+    test:
+      targets:
+        - PeekMarkTests
