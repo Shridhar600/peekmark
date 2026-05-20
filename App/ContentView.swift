@@ -13,17 +13,13 @@ struct ContentView: View {
             .frame(minWidth: 620, idealWidth: 860, minHeight: 480, idealHeight: 720)
             .navigationTitle(state.renderedDocument.title)
             .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
+                ToolbarItem(placement: .primaryAction) {
                     Button(action: openDocument) {
-                        Label("Open Markdown", systemImage: "doc.badge.plus")
+                        Label("Open", systemImage: "doc.badge.plus")
                     }
-                    .help("Open Markdown")
-
-                    AppearanceToolbarMenu(appearance: $appearance)
+                    .help("Open Markdown File (⌘O)")
                 }
             }
-            .toolbar(removing: .title)
-            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             .onAppear(perform: loadOpenedFile)
             .onChange(of: openedFile) {
                 loadOpenedFile()
@@ -92,25 +88,6 @@ struct ContentView: View {
     }
 }
 
-private struct AppearanceToolbarMenu: View {
-    @Binding var appearance: MarkdownAppearance
-
-    var body: some View {
-        Menu {
-            ForEach(MarkdownAppearance.allCases) { mode in
-                Button {
-                    appearance = mode
-                } label: {
-                    Label(mode.accessibilityLabel, systemImage: appearance == mode ? "checkmark" : mode.symbolName)
-                }
-            }
-        } label: {
-            Label("Preview Appearance", systemImage: appearance.symbolName)
-        }
-        .help("Preview Appearance")
-    }
-}
-
 extension MarkdownAppearance {
     var symbolName: String {
         switch self {
@@ -148,4 +125,8 @@ private struct EmptyStateView: View {
         .padding(36)
         .frame(maxWidth: 420)
     }
+}
+
+#Preview {
+    ContentView(openedFile: .constant(nil), openDocument: {})
 }
