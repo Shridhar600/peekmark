@@ -5,14 +5,13 @@ struct ContentView: View {
     @Binding var openedFile: URL?
     let openDocument: () -> Void
 
-    @State private var renderedDocument = RenderedDocument.empty
-    @State private var renderGeneration = 0
+    @State private var state = MarkdownPreviewState()
     @AppStorage("markdownAppearance") private var appearance = MarkdownAppearance.system
 
     var body: some View {
         contentView
             .frame(minWidth: 620, idealWidth: 860, minHeight: 480, idealHeight: 720)
-            .navigationTitle(renderedDocument.title)
+            .navigationTitle(state.renderedDocument.title)
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button(action: openDocument) {
@@ -34,7 +33,7 @@ struct ContentView: View {
             }
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 Task {
-                    await loadDroppedFile(from: providers)
+                    _ = await loadDroppedFile(from: providers)
                 }
                 return true
             }
@@ -42,32 +41,19 @@ struct ContentView: View {
 
     @ViewBuilder
     private var contentView: some View {
-        if renderedDocument.isEmpty {
+        if state.renderedDocument.isEmpty {
             EmptyStateView()
         } else {
-            MarkdownPreviewView(html: renderedDocument.html)
+            MarkdownPreviewView(html: state.renderedDocument.html)
         }
     }
 
     private func loadOpenedFile() {
-        renderGeneration += 1
-        let generation = renderGeneration
-
         guard let openedFile else {
-            renderedDocument = .empty
+            state.clear()
             return
         }
-
-        let currentAppearance = appearance
-        Task.detached(priority: .userInitiated) {
-            let document = RenderedDocument.load(from: openedFile, appearance: currentAppearance)
-            await MainActor.run {
-                guard renderGeneration == generation else {
-                    return
-                }
-                renderedDocument = document
-            }
-        }
+        state.load(url: openedFile, appearance: appearance)
     }
 
     private func loadDroppedFile(from providers: [NSItemProvider]) async -> Bool {
@@ -99,12 +85,10 @@ struct ContentView: View {
     }
 
     private func reloadForAppearanceChange() {
-        guard openedFile != nil else {
-            renderGeneration += 1
-            renderedDocument = renderedDocument.withAppearance(appearance)
-            return
+        state.reloadForAppearance(appearance, currentURL: openedFile)
+        if openedFile != nil {
+            state.load(url: openedFile!, appearance: appearance)
         }
-        loadOpenedFile()
     }
 }
 
@@ -163,49 +147,5 @@ private struct EmptyStateView: View {
         }
         .padding(36)
         .frame(maxWidth: 420)
-    }
-}
-
-private struct RenderedDocument {
-    let title: String
-    let html: String
-    let bodyHTML: String
-
-    var isEmpty: Bool {
-        html.isEmpty
-    }
-
-    static let empty = RenderedDocument(title: "PeekMark", html: "", bodyHTML: "")
-
-    static func load(from url: URL, appearance: MarkdownAppearance = .light) -> RenderedDocument {
-        let title = url.deletingPathExtension().lastPathComponent
-
-        do {
-            let result = try MarkdownDocumentLoader.withSecurityScopedAccess(to: url) {
-                let markdown = try MarkdownDocumentLoader.load(url: url)
-                return MarkdownRenderer.render(
-                    markdown: markdown,
-                    title: title,
-                    baseURL: url.deletingLastPathComponent(),
-                    appearance: appearance
-                )
-            }
-            return RenderedDocument(title: result.title, html: result.html, bodyHTML: result.bodyHTML)
-        } catch {
-            let result = MarkdownRenderer.renderError(
-                title: title,
-                message: error.localizedDescription,
-                appearance: appearance
-            )
-            return RenderedDocument(title: result.title, html: result.html, bodyHTML: result.bodyHTML)
-        }
-    }
-
-    func withAppearance(_ appearance: MarkdownAppearance) -> RenderedDocument {
-        guard !bodyHTML.isEmpty else {
-            return self
-        }
-        let result = MarkdownRenderer.wrapHTML(title: title, bodyHTML: bodyHTML, appearance: appearance)
-        return RenderedDocument(title: result.title, html: result.html, bodyHTML: result.bodyHTML)
     }
 }

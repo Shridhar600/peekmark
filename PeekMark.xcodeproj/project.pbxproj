@@ -32,6 +32,7 @@
 		E37C6DB4437A5C69B414DD51 /* PreviewProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 180FA0C604BACC993F44AE4E /* PreviewProvider.swift */; };
 		F2D5FF4BD690499396E61F16 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6990815F8228672122147D12 /* MarkdownRenderer.swift */; };
 		FC216A2BA42716567EAE9F01 /* MarkdownPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA30D156887A600F0EF17AF9 /* MarkdownPreviewView.swift */; };
+		2C7BB6F12C34A5F00B5E9D00 /* MarkdownPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7BB6F12C34A5F00B5E9D11 /* MarkdownPreviewState.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +73,7 @@
 		88C0C85D2624E4D2569CD633 /* PeekMarkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PeekMarkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2F08B9B4288EBB8061A8182 /* PeekMarkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeekMarkApp.swift; sourceTree = "<group>"; };
 		AA30D156887A600F0EF17AF9 /* MarkdownPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreviewView.swift; sourceTree = "<group>"; };
+		BF7BB6F12C34A5F00B5E9D11 /* MarkdownPreviewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreviewState.swift; sourceTree = "<group>"; };
 		C1D9CFBB9CED3F2679DAD894 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CC2046A177EB9F060F0AA1B2 /* PeekMarkQuickLookExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PeekMarkQuickLookExtension.entitlements; sourceTree = "<group>"; };
 		CFF19F9C39F05E9159E05CA6 /* MarkdownDocumentLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocumentLoader.swift; sourceTree = "<group>"; };
@@ -166,6 +168,7 @@
 				665D8F1951CCD2C65E46150E /* ContentView.swift */,
 				83B2D72B12EFAEE84BCE031A /* Info.plist */,
 				AA30D156887A600F0EF17AF9 /* MarkdownPreviewView.swift */,
+				BF7BB6F12C34A5F00B5E9D11 /* MarkdownPreviewState.swift */,
 				790BDC2A464E84699B9C83BD /* PeekMark.entitlements */,
 				A2F08B9B4288EBB8061A8182 /* PeekMarkApp.swift */,
 			);
@@ -330,6 +333,7 @@
 				A94628D9DD63E3C3B5CC1F6F /* HTMLSanitizer.swift in Sources */,
 				C26D1F881B68DFCFEACA52E4 /* MarkdownDocumentLoader.swift in Sources */,
 				FC216A2BA42716567EAE9F01 /* MarkdownPreviewView.swift in Sources */,
+				2C7BB6F12C34A5F00B5E9D00 /* MarkdownPreviewState.swift in Sources */,
 				D989B6E0824BF154A27E41EA /* MarkdownRenderer.swift in Sources */,
 				6DF83CCEEF4551C3EC982209 /* PeekMarkApp.swift in Sources */,
 				77C80901FE2A6F646711D7BF /* PeekMarkTheme.swift in Sources */,
