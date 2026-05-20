@@ -27,27 +27,27 @@ enum PeekMarkTheme {
         case .light:
             return css(
                 colorScheme: "light",
-                background: "#ffffff",
+                background: "#fafafa",
                 text: "#111111",
-                secondaryText: "#333333",
-                line: "#d0d0d0",
-                softLine: "#e6e6e6",
+                secondaryText: "#444444",
+                line: "#e0e0e0",
+                softLine: "#f0f0f0",
                 codeBackground: "#f5f5f5",
-                quoteBackground: "#f7f7f7",
-                tableStripe: "#fafafa",
+                quoteBackground: "#f8f8f8",
+                tableStripe: "#fcfcfc",
                 adaptiveDarkCSS: ""
             )
         case .dark:
             return css(
                 colorScheme: "dark",
-                background: "#111111",
+                background: "#1e1e1e",
                 text: "#f5f5f5",
-                secondaryText: "#d0d0d0",
-                line: "#4a4a4a",
-                softLine: "#303030",
-                codeBackground: "#1d1d1d",
-                quoteBackground: "#191919",
-                tableStripe: "#171717",
+                secondaryText: "#b0b0b0",
+                line: "#3a3a3a",
+                softLine: "#2a2a2a",
+                codeBackground: "#252525",
+                quoteBackground: "#222222",
+                tableStripe: "#1f1f1f",
                 adaptiveDarkCSS: ""
             )
         }
@@ -58,14 +58,14 @@ enum PeekMarkTheme {
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --background: #111111;
+        --background: #1e1e1e;
         --text: #f5f5f5;
-        --secondary-text: #d0d0d0;
-        --line: #4a4a4a;
-        --soft-line: #303030;
-        --code-bg: #1d1d1d;
-        --quote-bg: #191919;
-        --table-stripe: #171717;
+        --secondary-text: #b0b0b0;
+        --line: #3a3a3a;
+        --soft-line: #2a2a2a;
+        --code-bg: #252525;
+        --quote-bg: #222222;
+        --table-stripe: #1f1f1f;
       }
     }
     """
