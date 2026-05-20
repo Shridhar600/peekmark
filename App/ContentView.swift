@@ -33,7 +33,10 @@ struct ContentView: View {
                 reloadForAppearanceChange()
             }
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                loadDroppedFile(from: providers)
+                Task {
+                    await loadDroppedFile(from: providers)
+                }
+                return true
             }
     }
 
@@ -67,22 +70,32 @@ struct ContentView: View {
         }
     }
 
-    private func loadDroppedFile(from providers: [NSItemProvider]) -> Bool {
+    private func loadDroppedFile(from providers: [NSItemProvider]) async -> Bool {
         guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) else {
             return false
         }
-        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-            guard
-                let data = item as? Data,
-                let url = URL(dataRepresentation: data, relativeTo: nil)
-            else {
-                return
-            }
-            Task { @MainActor in
-                openedFile = url
+
+        guard let url = await loadFileURL(from: provider) else {
+            return false
+        }
+
+        openedFile = url
+        return true
+    }
+
+    private func loadFileURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                guard
+                    let data = item as? Data,
+                    let url = URL(dataRepresentation: data, relativeTo: nil)
+                else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: url)
             }
         }
-        return true
     }
 
     private func reloadForAppearanceChange() {
