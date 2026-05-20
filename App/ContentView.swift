@@ -2,21 +2,33 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
+    private enum SidebarItem: Hashable {
+        case preview
+    }
+
     @Binding var openedFile: URL?
-    let openDocument: () -> Void
+    let openMarkdownFile: () -> Void
 
     @State private var state = MarkdownPreviewState()
+    @State private var selection: SidebarItem? = .preview
+    @State private var searchText = ""
 
     var body: some View {
-        contentView
+        NavigationSplitView {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
+        } detail: {
+            detailContent
+        }
+        .navigationSplitViewStyle(.balanced)
             .frame(minWidth: 620, idealWidth: 860, minHeight: 480, idealHeight: 720)
-            .navigationTitle(state.renderedDocument.title)
+            .searchable(text: $searchText, prompt: "Search in document...")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: openDocument) {
+                ToolbarItem(placement: .secondaryAction) {
+                    Button(action: openMarkdownFile) {
                         Label("Open", systemImage: "doc.badge.plus")
                     }
-                    .help("Open Markdown File (⌘O)")
+                    .help("Open Markdown File")
                 }
             }
             .onAppear(perform: loadOpenedFile)
@@ -31,13 +43,34 @@ struct ContentView: View {
             }
     }
 
+    private var sidebar: some View {
+        List(selection: $selection) {
+            Section {
+                Label(sidebarTitle, systemImage: "doc.text.magnifyingglass")
+                    .tag(SidebarItem.preview)
+            }
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("PeekMark")
+    }
+
     @ViewBuilder
-    private var contentView: some View {
+    private var detailContent: some View {
         if state.renderedDocument.isEmpty {
             EmptyStateView()
+                .navigationTitle("PeekMark")
         } else {
-            MarkdownPreviewView(html: state.renderedDocument.html)
+            MarkdownPreviewView(html: state.renderedDocument.html, searchText: searchText)
+                .navigationTitle(state.renderedDocument.title)
         }
+    }
+
+    private var sidebarTitle: String {
+        if state.renderedDocument.isEmpty {
+            return "Preview"
+        }
+
+        return state.renderedDocument.title
     }
 
     private func loadOpenedFile() {
@@ -79,25 +112,15 @@ struct ContentView: View {
 
 private struct EmptyStateView: View {
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "doc.richtext")
-                .font(.system(size: 44, weight: .regular))
-                .foregroundStyle(.secondary)
-                .symbolRenderingMode(.hierarchical)
-
-            Text("Open a Markdown File")
-                .font(.title2.weight(.semibold))
-
+        ContentUnavailableView {
+            Label("Open a Markdown File", systemImage: "doc.richtext")
+        } description: {
             Text("Use File > Open, drop a .md file here, or preview from Finder with Space.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(36)
-        .frame(maxWidth: 420)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 #Preview {
-    ContentView(openedFile: .constant(nil), openDocument: {})
+    ContentView(openedFile: .constant(nil), openMarkdownFile: {})
 }

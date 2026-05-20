@@ -43,7 +43,7 @@ struct PeekMarkApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(openedFile: $openedFile, openDocument: openMarkdownFile)
+            ContentView(openedFile: $openedFile, openMarkdownFile: openMarkdownFile)
                 .onAppear {
                     appDelegate.setOpenDocumentHandler { url in
                         openedFile = url
@@ -57,12 +57,6 @@ struct PeekMarkApp: App {
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) { }
-            CommandGroup(after: .newItem) {
-                Button("Open Markdown...") {
-                    openMarkdownFile()
-                }
-                .keyboardShortcut("o")
-            }
         }
     }
 
