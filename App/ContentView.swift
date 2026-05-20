@@ -6,7 +6,6 @@ struct ContentView: View {
     let openDocument: () -> Void
 
     @State private var state = MarkdownPreviewState()
-    @AppStorage("markdownAppearance") private var appearance = MarkdownAppearance.system
 
     var body: some View {
         contentView
@@ -23,9 +22,6 @@ struct ContentView: View {
             .onAppear(perform: loadOpenedFile)
             .onChange(of: openedFile) {
                 loadOpenedFile()
-            }
-            .onChange(of: appearance) {
-                reloadForAppearanceChange()
             }
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 Task {
@@ -49,7 +45,7 @@ struct ContentView: View {
             state.clear()
             return
         }
-        state.load(url: openedFile, appearance: appearance)
+        state.load(url: openedFile)
     }
 
     private func loadDroppedFile(from providers: [NSItemProvider]) async -> Bool {
@@ -77,31 +73,6 @@ struct ContentView: View {
                 }
                 continuation.resume(returning: url)
             }
-        }
-    }
-
-    private func reloadForAppearanceChange() {
-        state.reloadForAppearance(appearance, currentURL: openedFile)
-        if openedFile != nil {
-            state.load(url: openedFile!, appearance: appearance)
-        }
-    }
-}
-
-extension MarkdownAppearance {
-    var symbolName: String {
-        switch self {
-        case .system: return "circle.lefthalf.filled"
-        case .light: return "sun.max"
-        case .dark: return "moon.fill"
-        }
-    }
-
-    var accessibilityLabel: String {
-        switch self {
-        case .system: return "System appearance"
-        case .light: return "Light mode"
-        case .dark: return "Dark mode"
         }
     }
 }
