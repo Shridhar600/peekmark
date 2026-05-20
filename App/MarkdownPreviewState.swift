@@ -51,7 +51,7 @@ final class MarkdownPreviewState {
     var renderedDocument: RenderedDocument = .empty
     var renderGeneration: Int = 0
 
-    func load(url: URL, appearance: MarkdownAppearance) {
+    func load(url: URL, appearance: MarkdownAppearance = .system) {
         renderGeneration += 1
         let generation = renderGeneration
 
