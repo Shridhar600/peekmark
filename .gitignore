@@ -11,3 +11,6 @@ xcuserdata/
 *.zip
 .worktrees/
 docs/
+.agents/
+.mavis/
+.opencode/
