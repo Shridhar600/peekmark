@@ -30,6 +30,19 @@ enum MarkdownDocumentLoader {
         }
         return text
     }
+
+    static func load(url: URL, byteLimit: Int = defaultByteLimit) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            Task {
+                do {
+                    let result = try load(url: url, byteLimit: byteLimit)
+                    continuation.resume(returning: result)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
 }
 
 enum PeekMarkError: Error, LocalizedError {
