@@ -7,26 +7,39 @@ struct RenderedDocument: Sendable {
     let bodyHTML: String
     let rawMarkdown: String
     let headings: [HeadingItem]
+    let modificationDate: Date?
+    let fileURL: URL?
+    let metadata: [String: String]
 
     var isEmpty: Bool {
         html.isEmpty
     }
 
-    static let empty = RenderedDocument(title: "PeekMark", html: "", bodyHTML: "", rawMarkdown: "", headings: [])
+    static let empty = RenderedDocument(title: "PeekMark", html: "", bodyHTML: "", rawMarkdown: "", headings: [], modificationDate: nil, fileURL: nil, metadata: [:])
 
-    static func load(from url: URL, appearance: MarkdownAppearance = .light) -> RenderedDocument {
+    static func load(
+        from url: URL,
+        appearance: MarkdownAppearance = .light,
+        font: PreviewFont = .system,
+        fontSize: Double = 14.5,
+        spacing: PreviewSpacing = .regular
+    ) -> RenderedDocument {
         let title = url.deletingPathExtension().lastPathComponent
 
         do {
-            let (markdown, result) = try MarkdownDocumentLoader.withSecurityScopedAccess(to: url) { resolvedURL in
+            let (markdown, result, modificationDate) = try MarkdownDocumentLoader.withSecurityScopedAccess(to: url) { resolvedURL in
+                let modDate = try? resolvedURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
                 let markdown = try MarkdownDocumentLoader.load(url: resolvedURL)
                 let renderResult = MarkdownRenderer.render(
                     markdown: markdown,
                     title: title,
                     baseURL: resolvedURL.deletingLastPathComponent(),
-                    appearance: appearance
+                    appearance: appearance,
+                    font: font,
+                    fontSize: fontSize,
+                    spacing: spacing
                 )
-                return (markdown, renderResult)
+                return (markdown, renderResult, modDate)
             }
             let headings = HeadingExtractor.extract(from: markdown)
             return RenderedDocument(
@@ -34,35 +47,60 @@ struct RenderedDocument: Sendable {
                 html: result.html,
                 bodyHTML: result.bodyHTML,
                 rawMarkdown: markdown,
-                headings: headings
+                headings: headings,
+                modificationDate: modificationDate,
+                fileURL: url,
+                metadata: result.metadata
             )
         } catch {
             let result = MarkdownRenderer.renderError(
                 title: title,
                 message: error.localizedDescription,
-                appearance: appearance
+                appearance: appearance,
+                font: font,
+                fontSize: fontSize,
+                spacing: spacing
             )
             return RenderedDocument(
                 title: result.title,
                 html: result.html,
                 bodyHTML: result.bodyHTML,
                 rawMarkdown: "",
-                headings: []
+                headings: [],
+                modificationDate: nil,
+                fileURL: url,
+                metadata: [:]
             )
         }
     }
 
-    func withAppearance(_ appearance: MarkdownAppearance) -> RenderedDocument {
+    func withStyle(
+        appearance: MarkdownAppearance,
+        font: PreviewFont,
+        fontSize: Double,
+        spacing: PreviewSpacing
+    ) -> RenderedDocument {
         guard !bodyHTML.isEmpty else {
             return self
         }
-        let result = MarkdownRenderer.wrapHTML(title: title, bodyHTML: bodyHTML, appearance: appearance)
+        let result = MarkdownRenderer.wrapHTML(
+            title: title,
+            bodyHTML: bodyHTML,
+            metadata: metadata,
+            appearance: appearance,
+            font: font,
+            fontSize: fontSize,
+            spacing: spacing
+        )
         return RenderedDocument(
             title: result.title,
             html: result.html,
             bodyHTML: result.bodyHTML,
             rawMarkdown: rawMarkdown,
-            headings: headings
+            headings: headings,
+            modificationDate: modificationDate,
+            fileURL: fileURL,
+            metadata: metadata
         )
     }
 }
@@ -91,13 +129,19 @@ final class MarkdownPreviewState {
         return max(1, Int(ceil(Double(words) / 200.0)))
     }
 
-    func load(url: URL, appearance: MarkdownAppearance = .system) {
+    func load(
+        url: URL,
+        appearance: MarkdownAppearance = .system,
+        font: PreviewFont = .system,
+        fontSize: Double = 14.5,
+        spacing: PreviewSpacing = .regular
+    ) {
         renderGeneration += 1
         let generation = renderGeneration
 
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            let document = RenderedDocument.load(from: url, appearance: appearance)
+            let document = RenderedDocument.load(from: url, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
             await MainActor.run {
                 guard self.renderGeneration == generation else { return }
                 self.renderedDocument = document
@@ -110,10 +154,18 @@ final class MarkdownPreviewState {
         renderGeneration += 1
     }
 
-    func reloadForAppearance(_ appearance: MarkdownAppearance, currentURL: URL?) {
+    func reloadForStyle(
+        appearance: MarkdownAppearance,
+        font: PreviewFont,
+        fontSize: Double,
+        spacing: PreviewSpacing,
+        currentURL: URL?
+    ) {
         renderGeneration += 1
-        if currentURL == nil {
-            renderedDocument = renderedDocument.withAppearance(appearance)
+        if let currentURL {
+            load(url: currentURL, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
+        } else {
+            renderedDocument = renderedDocument.withStyle(appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
         }
     }
 }

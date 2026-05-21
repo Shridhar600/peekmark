@@ -184,6 +184,29 @@ final class MarkdownRendererTests: XCTestCase {
 
         XCTAssertFalse(result.html.contains("https://example.com/pixel.png"))
     }
+
+    func testParsesYAMLMetadataAndDoesNotRenderTable() {
+        let markdown = """
+        ---
+        title: Metadata Test
+        author: PeekMark
+        tags: [markdown, swift]
+        ---
+        # Title
+
+        Body content.
+        """
+
+        let result = MarkdownRenderer.render(markdown: markdown, title: "Doc")
+
+        XCTAssertEqual(result.metadata["title"], "Metadata Test")
+        XCTAssertEqual(result.metadata["author"], "PeekMark")
+        XCTAssertEqual(result.metadata["tags"], "[markdown, swift]")
+        
+        XCTAssertFalse(result.html.contains("<table class=\"front-matter-table\">"))
+        XCTAssertFalse(result.bodyHTML.contains("Metadata Test"))
+        XCTAssertTrue(result.bodyHTML.contains("<h1>Title</h1>"))
+    }
 }
 
 private extension String {

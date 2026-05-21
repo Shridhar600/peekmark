@@ -5,6 +5,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
     let html: String
     var searchText: String = ""
     @Binding var scrollToHeaderIndex: Int?
+    let documentTitle: String
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -12,7 +13,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        // Enable Javascript to support syntax highlighting, LaTeX, and Mermaid
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.websiteDataStore = .nonPersistent()
         configuration.suppressesIncrementalRendering = false
 
@@ -68,6 +70,16 @@ struct MarkdownPreviewView: NSViewRepresentable {
             decidePolicyFor navigationAction: WKNavigationAction,
             decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
         ) {
+            if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
+                if url.scheme == "about" {
+                    decisionHandler(.allow)
+                } else {
+                    NSWorkspace.shared.open(url)
+                    decisionHandler(.cancel)
+                }
+                return
+            }
+
             let isMainFrame = navigationAction.targetFrame?.isMainFrame ?? false
             guard allowNextMainFrameLoad, isMainFrame, navigationAction.navigationType == .other else {
                 decisionHandler(.cancel)
