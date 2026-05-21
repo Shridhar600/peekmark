@@ -9,12 +9,12 @@ enum MarkdownAppearance: String, CaseIterable, Identifiable {
 }
 
 enum PeekMarkTheme {
-    static func css(for appearance: MarkdownAppearance = .light) -> String {
+    static func css(for appearance: MarkdownAppearance = .system) -> String {
         switch appearance {
         case .system:
             return css(
                 colorScheme: "light dark",
-                background: "rgba(255, 255, 255, 0.85)",
+                background: "transparent",
                 text: "#111111",
                 secondaryText: "#333333",
                 line: "#d0d0d0",
@@ -27,7 +27,7 @@ enum PeekMarkTheme {
         case .light:
             return css(
                 colorScheme: "light",
-                background: "rgba(250, 250, 250, 0.85)",
+                background: "transparent",
                 text: "#111111",
                 secondaryText: "#444444",
                 line: "#e0e0e0",
@@ -40,7 +40,7 @@ enum PeekMarkTheme {
         case .dark:
             return css(
                 colorScheme: "dark",
-                background: "rgba(30, 30, 30, 0.85)",
+                background: "transparent",
                 text: "#f5f5f5",
                 secondaryText: "#b0b0b0",
                 line: "#3a3a3a",
@@ -58,7 +58,7 @@ enum PeekMarkTheme {
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --background: rgba(30, 30, 30, 0.85);
+        --background: transparent;
         --text: #f5f5f5;
         --secondary-text: #b0b0b0;
         --line: #3a3a3a;
@@ -107,14 +107,14 @@ enum PeekMarkTheme {
     body {
       margin: 0;
       padding: 28px;
-      background: var(--background);
+      background: transparent;
     }
 
     main {
       max-width: 840px;
       margin: 0 auto;
       padding: 0;
-      background: var(--background);
+      background: transparent;
       color: var(--text);
     }
 
