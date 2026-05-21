@@ -44,7 +44,7 @@ struct PeekMarkApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(openedFile: $openedFile, openMarkdownFile: openMarkdownFile)
-                .containerBackground(.thinMaterial, for: .window)
+                .containerBackground(.windowBackground, for: .window)
                 .onAppear {
                     appDelegate.setOpenDocumentHandler { url in
                         openedFile = url

@@ -28,24 +28,27 @@ struct ContentView: View {
         .searchable(text: $searchText, prompt: "Search in document...")
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .toolbar {
-            // Right Actions - Open + Copy Controls
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: openMarkdownFile) {
-                    Label("Open", systemImage: "doc.badge.plus")
-                }
-                .help("Open Markdown File")
+            // Right Actions - Grouped Open + Copy Controls
+            ToolbarItem(placement: .primaryAction) {
+                ControlGroup {
+                    Button(action: openMarkdownFile) {
+                        Label("Open File...", systemImage: "doc.badge.plus")
+                    }
+                    .help("Open Markdown File")
 
-                Menu {
-                    Button(action: copyMarkdown) {
-                        Label("Copy Markdown Source", systemImage: "doc.on.doc")
+                    Menu {
+                        Button(action: copyMarkdown) {
+                            Label("Copy Markdown Source", systemImage: "doc.on.doc")
+                        }
+                        Button(action: copyHTML) {
+                            Label("Copy Rendered HTML", systemImage: "code")
+                        }
+                    } label: {
+                        Label("Copy Options", systemImage: "doc.on.clipboard")
                     }
-                    Button(action: copyHTML) {
-                        Label("Copy Rendered HTML", systemImage: "code")
-                    }
-                } label: {
-                    Label("Copy", systemImage: "doc.on.clipboard")
+                    .help("Copy content options")
                 }
-                .help("Copy content options")
+                .controlGroupStyle(.navigation)
             }
         }
         .onAppear(perform: loadOpenedFile)
@@ -114,7 +117,7 @@ struct ContentView: View {
     @ViewBuilder
     private var detailContent: some View {
         if state.renderedDocument.isEmpty {
-            EmptyStateView()
+            EmptyStateView(openMarkdownFile: openMarkdownFile)
                 .navigationTitle("PeekMark")
         } else {
             MarkdownPreviewView(
@@ -178,8 +181,9 @@ struct ContentView: View {
     }
 
     private func addToRecentFiles(_ url: URL) {
-        var current = recentFiles.filter { $0 != url }
-        current.insert(url, at: 0)
+        let standardURL = url.resolvingSymlinksInPath()
+        var current = recentFiles.map { $0.resolvingSymlinksInPath() }.filter { $0 != standardURL }
+        current.insert(standardURL, at: 0)
         if current.count > 5 {
             current = Array(current.prefix(5))
         }
@@ -205,9 +209,10 @@ struct ContentView: View {
             state.clear()
             return
         }
-        BookmarkManager.saveBookmark(for: openedFile)
-        state.load(url: openedFile, appearance: .system)
-        addToRecentFiles(openedFile)
+        let resolvedURL = BookmarkManager.resolveBookmark(for: openedFile) ?? openedFile
+        BookmarkManager.saveBookmark(for: resolvedURL)
+        state.load(url: resolvedURL, appearance: .system)
+        addToRecentFiles(resolvedURL)
     }
 
     private func loadDroppedFile(from providers: [NSItemProvider]) async -> Bool {
@@ -253,11 +258,17 @@ private struct StatsHUDBackgroundModifier: ViewModifier {
 }
 
 private struct EmptyStateView: View {
+    let openMarkdownFile: () -> Void
+
     var body: some View {
         ContentUnavailableView {
             Label("Open a Markdown File", systemImage: "doc.richtext")
         } description: {
             Text("Use File > Open, drop a .md file here, or preview from Finder with Space.")
+        } actions: {
+            Button("Open File...", action: openMarkdownFile)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
