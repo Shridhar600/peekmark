@@ -14,7 +14,7 @@ enum PeekMarkTheme {
         case .system:
             return css(
                 colorScheme: "light dark",
-                background: "#ffffff",
+                background: "rgba(255, 255, 255, 0.85)",
                 text: "#111111",
                 secondaryText: "#333333",
                 line: "#d0d0d0",
@@ -27,7 +27,7 @@ enum PeekMarkTheme {
         case .light:
             return css(
                 colorScheme: "light",
-                background: "#fafafa",
+                background: "rgba(250, 250, 250, 0.85)",
                 text: "#111111",
                 secondaryText: "#444444",
                 line: "#e0e0e0",
@@ -40,7 +40,7 @@ enum PeekMarkTheme {
         case .dark:
             return css(
                 colorScheme: "dark",
-                background: "#1e1e1e",
+                background: "rgba(30, 30, 30, 0.85)",
                 text: "#f5f5f5",
                 secondaryText: "#b0b0b0",
                 line: "#3a3a3a",
@@ -58,7 +58,7 @@ enum PeekMarkTheme {
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --background: #1e1e1e;
+        --background: rgba(30, 30, 30, 0.85);
         --text: #f5f5f5;
         --secondary-text: #b0b0b0;
         --line: #3a3a3a;
@@ -179,6 +179,17 @@ enum PeekMarkTheme {
     tr:nth-child(even) td { background: var(--table-stripe); }
     hr { border: 0; border-top: 1px solid var(--line); margin: 1.6rem 0; }
     \(adaptiveDarkCSS)
+
+    @media (prefers-reduced-transparency: reduce) {
+      :root {
+        --background: #fafafa !important;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #1e1e1e !important;
+        }
+      }
+    }
 
     @media (max-width: 720px) {
       body { padding: 20px; }

@@ -4,6 +4,7 @@ import WebKit
 struct MarkdownPreviewView: NSViewRepresentable {
     let html: String
     var searchText: String = ""
+    @Binding var scrollToHeaderIndex: Int?
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -23,6 +24,22 @@ struct MarkdownPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        if let headerIndex = scrollToHeaderIndex {
+            let script = """
+            (function() {
+                var headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+                if (headings[\(headerIndex)]) {
+                    headings[\(headerIndex)].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            })();
+            """
+            webView.evaluateJavaScript(script) { _, _ in
+                DispatchQueue.main.async {
+                    self.scrollToHeaderIndex = nil
+                }
+            }
+        }
+
         guard context.coordinator.lastHTML != html || context.coordinator.lastSearchText != searchText else {
             return
         }
