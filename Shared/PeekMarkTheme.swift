@@ -14,40 +14,40 @@ enum PeekMarkTheme {
         case .system:
             return css(
                 colorScheme: "light dark",
-                background: "transparent",
-                text: "#111111",
-                secondaryText: "#333333",
-                line: "#d0d0d0",
-                softLine: "#e6e6e6",
-                codeBackground: "#f5f5f5",
-                quoteBackground: "#f7f7f7",
-                tableStripe: "#fafafa",
+                background: "#ffffff",
+                text: "#1d1d1f",
+                secondaryText: "#86868b",
+                line: "#e5e5e7",
+                softLine: "#f5f5f7",
+                codeBackground: "#f5f5f7",
+                quoteBackground: "#f5f5f7",
+                tableStripe: "#f9f9fb",
                 adaptiveDarkCSS: adaptiveDarkCSS
             )
         case .light:
             return css(
                 colorScheme: "light",
-                background: "transparent",
-                text: "#111111",
-                secondaryText: "#444444",
-                line: "#e0e0e0",
-                softLine: "#f0f0f0",
-                codeBackground: "#f5f5f5",
-                quoteBackground: "#f8f8f8",
-                tableStripe: "#fcfcfc",
+                background: "#ffffff",
+                text: "#1d1d1f",
+                secondaryText: "#86868b",
+                line: "#e5e5e7",
+                softLine: "#f5f5f7",
+                codeBackground: "#f5f5f7",
+                quoteBackground: "#f5f5f7",
+                tableStripe: "#f9f9fb",
                 adaptiveDarkCSS: ""
             )
         case .dark:
             return css(
                 colorScheme: "dark",
-                background: "transparent",
-                text: "#f5f5f5",
-                secondaryText: "#b0b0b0",
-                line: "#3a3a3a",
-                softLine: "#2a2a2a",
-                codeBackground: "#252525",
-                quoteBackground: "#222222",
-                tableStripe: "#1f1f1f",
+                background: "#1e1e1e",
+                text: "#f5f5f7",
+                secondaryText: "#86868b",
+                line: "#323236",
+                softLine: "#2c2c30",
+                codeBackground: "#2c2c30",
+                quoteBackground: "#2c2c30",
+                tableStripe: "#1c1c1e",
                 adaptiveDarkCSS: ""
             )
         }
@@ -58,14 +58,14 @@ enum PeekMarkTheme {
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --background: transparent;
-        --text: #f5f5f5;
-        --secondary-text: #b0b0b0;
-        --line: #3a3a3a;
-        --soft-line: #2a2a2a;
-        --code-bg: #252525;
-        --quote-bg: #222222;
-        --table-stripe: #1f1f1f;
+        --bg: #1e1e1e;
+        --text: #f5f5f7;
+        --secondary-text: #86868b;
+        --line: #323236;
+        --soft-line: #2c2c30;
+        --code-bg: #2c2c30;
+        --quote-bg: #2c2c30;
+        --table-stripe: #1c1c1e;
       }
     }
     """
@@ -86,7 +86,7 @@ enum PeekMarkTheme {
         """
     :root {
       color-scheme: \(colorScheme);
-      --background: \(background);
+      --bg: \(background);
       --text: \(text);
       --secondary-text: \(secondaryText);
       --line: \(line);
@@ -99,29 +99,28 @@ enum PeekMarkTheme {
     * { box-sizing: border-box; }
 
     html {
-      background: var(--background);
+      background: transparent;
       color: var(--text);
-      font: 16px/1.58 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
     }
 
     body {
       margin: 0;
-      padding: 28px;
+      padding: 44px 32px;
       background: transparent;
     }
 
     main {
-      max-width: 840px;
+      max-width: 780px;
       margin: 0 auto;
-      padding: 0;
-      background: transparent;
-      color: var(--text);
     }
 
     h1, h2, h3, h4, h5, h6 {
-      line-height: 1.18;
+      line-height: 1.25;
       letter-spacing: 0;
       margin: 1.35em 0 0.45em;
+      color: var(--text);
+      font-weight: 600;
     }
 
     h1:first-child, h2:first-child, h3:first-child { margin-top: 0; }
@@ -180,19 +179,8 @@ enum PeekMarkTheme {
     hr { border: 0; border-top: 1px solid var(--line); margin: 1.6rem 0; }
     \(adaptiveDarkCSS)
 
-    @media (prefers-reduced-transparency: reduce) {
-      :root {
-        --background: #fafafa !important;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --background: #1e1e1e !important;
-        }
-      }
-    }
-
-    @media (max-width: 720px) {
-      body { padding: 20px; }
+    @media (max-width: 800px) {
+      body { padding: 24px 20px; }
     }
     """
     }

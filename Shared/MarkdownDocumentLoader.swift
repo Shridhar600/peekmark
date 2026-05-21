@@ -71,6 +71,7 @@ enum BookmarkManager {
 
     static func saveBookmark(for url: URL) {
         guard url.isFileURL else { return }
+        let resolvedPath = url.resolvingSymlinksInPath().path
         do {
             let isAccessing = url.startAccessingSecurityScopedResource()
             defer {
@@ -85,17 +86,18 @@ enum BookmarkManager {
                 relativeTo: nil
             )
             var bookmarks = UserDefaults.standard.dictionary(forKey: key) as? [String: Data] ?? [:]
-            bookmarks[url.path] = bookmarkData
+            bookmarks[resolvedPath] = bookmarkData
             UserDefaults.standard.set(bookmarks, forKey: key)
         } catch {
-            print("Failed to save bookmark for \(url.path): \(error)")
+            print("Failed to save bookmark for \(resolvedPath): \(error)")
         }
     }
 
     static func resolveBookmark(for url: URL) -> URL? {
         guard url.isFileURL else { return nil }
+        let resolvedPath = url.resolvingSymlinksInPath().path
         guard let bookmarks = UserDefaults.standard.dictionary(forKey: key) as? [String: Data],
-              let bookmarkData = bookmarks[url.path] else {
+              let bookmarkData = bookmarks[resolvedPath] else {
             return nil
         }
         do {
@@ -111,7 +113,7 @@ enum BookmarkManager {
             }
             return resolvedURL
         } catch {
-            print("Failed to resolve bookmark for \(url.path): \(error)")
+            print("Failed to resolve bookmark for \(resolvedPath): \(error)")
             return nil
         }
     }
