@@ -5,6 +5,7 @@ struct MarkdownRenderResult {
     let title: String
     let html: String
     let bodyHTML: String
+    let metadata: [String: String]
 }
 
 enum MarkdownRenderer {
@@ -12,23 +13,64 @@ enum MarkdownRenderer {
         markdown: String,
         title: String,
         baseURL: URL? = nil,
-        appearance: MarkdownAppearance = .light
+        appearance: MarkdownAppearance = .light,
+        font: PreviewFont = .system,
+        fontSize: Double = 14.5,
+        spacing: PreviewSpacing = .regular
     ) -> MarkdownRenderResult {
-        let bodyHTML = renderBody(markdown: markdown, baseURL: baseURL)
-        return wrapHTML(title: title, bodyHTML: bodyHTML, appearance: appearance)
+        let (metadata, content) = parseFrontMatter(markdown)
+        let bodyHTML = renderBody(markdown: content, baseURL: baseURL)
+        return wrapHTML(title: title, bodyHTML: bodyHTML, metadata: metadata, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
     }
 
     static func renderError(
         title: String,
         message: String,
-        appearance: MarkdownAppearance = .light
+        appearance: MarkdownAppearance = .light,
+        font: PreviewFont = .system,
+        fontSize: Double = 14.5,
+        spacing: PreviewSpacing = .regular
     ) -> MarkdownRenderResult {
         let escapedMessage = HTMLSanitizer.escape(message)
         let body = """
         <h1>\(HTMLSanitizer.escape(title))</h1>
         <blockquote>\(escapedMessage)</blockquote>
         """
-        return wrapHTML(title: title, bodyHTML: body, appearance: appearance)
+        return wrapHTML(title: title, bodyHTML: body, metadata: [:], appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
+    }
+
+    static func parseFrontMatter(_ markdown: String) -> (metadata: [String: String], content: String) {
+        let lines = markdown.components(separatedBy: .newlines)
+        guard lines.first?.trimmingCharacters(in: .whitespaces) == "---" else {
+            return ([:], markdown)
+        }
+        
+        var metadata: [String: String] = [:]
+        var contentStartLineIndex = -1
+        
+        for i in 1..<lines.count {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed == "---" {
+                contentStartLineIndex = i + 1
+                break
+            }
+            
+            let parts = line.split(separator: ":", maxSplits: 1).map { String($0) }
+            if parts.count == 2 {
+                let key = parts[0].trimmingCharacters(in: .whitespaces)
+                let value = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                metadata[key] = value
+            }
+        }
+        
+        if contentStartLineIndex != -1 {
+            let contentLines = lines.suffix(from: contentStartLineIndex)
+            return (metadata, contentLines.joined(separator: "\n"))
+        } else {
+            return ([:], markdown)
+        }
     }
 
     static func renderBody(markdown: String, baseURL: URL? = nil) -> String {
@@ -37,31 +79,131 @@ enum MarkdownRenderer {
         return embedLocalImages(in: body, baseURL: baseURL)
     }
 
-    static func wrapHTML(title: String, bodyHTML: String, appearance: MarkdownAppearance) -> MarkdownRenderResult {
+    static func wrapHTML(
+        title: String,
+        bodyHTML: String,
+        metadata: [String: String],
+        appearance: MarkdownAppearance,
+        font: PreviewFont = .system,
+        fontSize: Double = 14.5,
+        spacing: PreviewSpacing = .regular
+    ) -> MarkdownRenderResult {
         let escapedTitle = HTMLSanitizer.escape(title)
         return MarkdownRenderResult(
             title: title,
-            html: documentHTML(title: escapedTitle, body: bodyHTML, appearance: appearance),
-            bodyHTML: bodyHTML
+            html: documentHTML(title: escapedTitle, body: bodyHTML, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing),
+            bodyHTML: bodyHTML,
+            metadata: metadata
         )
     }
 
-    private static func documentHTML(title: String, body: String, appearance: MarkdownAppearance) -> String {
-        """
+    private static func documentHTML(
+        title: String,
+        body: String,
+        appearance: MarkdownAppearance,
+        font: PreviewFont,
+        fontSize: Double,
+        spacing: PreviewSpacing
+    ) -> String {
+        let highlightCSSLink: String
+        switch appearance {
+        case .system:
+            highlightCSSLink = """
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+            """
+        case .light:
+            highlightCSSLink = """
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+            """
+        case .dark:
+            highlightCSSLink = """
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+            """
+        }
+
+        return """
         <!doctype html>
         <html>
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <title>\(title)</title>
+          
+          <!-- Highlight.js for Syntax Highlighting -->
+          \(highlightCSSLink)
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+          
+          <!-- KaTeX for LaTeX Render -->
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
           <style>
-        \(PeekMarkTheme.css(for: appearance))
+        \(PeekMarkTheme.css(for: appearance, font: font, fontSize: fontSize, spacing: spacing))
+          
+          /* Customized math and code layouts */
+          .mermaid {
+            background: var(--code-bg);
+            border: 1px solid var(--soft-line);
+            border-radius: 6px;
+            padding: 16px;
+            margin: 0 0 var(--paragraph-margin);
+            display: flex;
+            justify-content: center;
+          }
+          pre code.hljs {
+            background: var(--code-bg);
+            border-radius: 4px;
+            padding: 0;
+          }
+          pre {
+            background: var(--code-bg) !important;
+          }
+          code:not(.hljs) {
+            background: var(--code-bg);
+          }
           </style>
         </head>
         <body>
           <main>
         \(body)
           </main>
+
+          <script>
+            // Convert Mermaid code blocks
+            document.querySelectorAll('pre code.language-mermaid').forEach(function(codeBlock) {
+                var pre = codeBlock.parentNode;
+                var div = document.createElement('div');
+                div.className = 'mermaid';
+                div.textContent = codeBlock.textContent;
+                pre.parentNode.replaceChild(div, pre);
+            });
+
+            // Run Highlight.js
+            hljs.highlightAll();
+
+            // Run KaTeX auto-render
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\\\(', right: '\\\\)', display: false},
+                    {left: '\\\\[', right: '\\\\]', display: true}
+                ],
+                throwOnError : false
+            });
+          </script>
+
+          <!-- Load Mermaid ESM -->
+          <script type="module">
+            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+            mermaid.initialize({
+              startOnLoad: true,
+              theme: 'dark',
+              securityLevel: 'loose'
+            });
+          </script>
         </body>
         </html>
         """

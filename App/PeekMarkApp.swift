@@ -16,11 +16,6 @@ final class PeekMarkAppDelegate: NSObject, NSApplicationDelegate {
         urls.forEach(open)
     }
 
-    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
-        open(URL(fileURLWithPath: filename))
-        return true
-    }
-
     private func open(_ url: URL) {
         guard let openDocument else {
             pendingOpenURLs.append(url)
@@ -47,10 +42,12 @@ struct PeekMarkApp: App {
                 .containerBackground(.windowBackground, for: .window)
                 .onAppear {
                     appDelegate.setOpenDocumentHandler { url in
+                        BookmarkManager.saveBookmark(for: url)
                         openedFile = url
                     }
                 }
                 .onOpenURL { url in
+                    BookmarkManager.saveBookmark(for: url)
                     openedFile = url
                 }
         }
@@ -74,6 +71,7 @@ struct PeekMarkApp: App {
             guard response == .OK, let url = panel.url else {
                 return
             }
+            BookmarkManager.saveBookmark(for: url)
             openedFile = url
         }
     }
