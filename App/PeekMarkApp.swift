@@ -44,6 +44,7 @@ struct PeekMarkApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(openedFile: $openedFile, openMarkdownFile: openMarkdownFile)
+                .containerBackground(.thinMaterial, for: .window)
                 .onAppear {
                     appDelegate.setOpenDocumentHandler { url in
                         openedFile = url
@@ -53,7 +54,7 @@ struct PeekMarkApp: App {
                     openedFile = url
                 }
         }
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowBackgroundDragBehavior(.enabled)
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) { }
