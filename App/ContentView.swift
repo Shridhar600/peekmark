@@ -13,7 +13,6 @@ struct ContentView: View {
     @State private var selection: SidebarItem? = .preview
     @State private var searchText = ""
     @State private var scrollToHeaderIndex: Int?
-    @State private var selectedAppearance: MarkdownAppearance = .system
     
     @AppStorage("recentFiles") private var recentFilesRaw: String = ""
 
@@ -29,29 +28,13 @@ struct ContentView: View {
         .searchable(text: $searchText, prompt: "Search in document...")
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .toolbar {
-            // Left Action - Open File
-            ToolbarItemGroup(placement: .navigation) {
+            // Right Actions - Open + Copy Controls
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: openMarkdownFile) {
                     Label("Open", systemImage: "doc.badge.plus")
                 }
                 .help("Open Markdown File")
-            }
-            
-            // Spacer to separate elements
-            ToolbarItem {
-                Spacer()
-            }
-            
-            // Right Actions - Theme and Copy Controls
-            ToolbarItemGroup(placement: .primaryAction) {
-                Picker("Theme", selection: $selectedAppearance) {
-                    Image(systemName: "circle.righthalf.filled").tag(MarkdownAppearance.system)
-                    Image(systemName: "sun.max.fill").tag(MarkdownAppearance.light)
-                    Image(systemName: "moon.fill").tag(MarkdownAppearance.dark)
-                }
-                .pickerStyle(.segmented)
-                .help("Appearance Mode")
-                
+
                 Menu {
                     Button(action: copyMarkdown) {
                         Label("Copy Markdown Source", systemImage: "doc.on.doc")
@@ -68,11 +51,6 @@ struct ContentView: View {
         .onAppear(perform: loadOpenedFile)
         .onChange(of: openedFile) {
             loadOpenedFile()
-        }
-        .onChange(of: selectedAppearance) {
-            if let openedFile {
-                state.load(url: openedFile, appearance: selectedAppearance)
-            }
         }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             Task {
@@ -227,7 +205,8 @@ struct ContentView: View {
             state.clear()
             return
         }
-        state.load(url: openedFile, appearance: selectedAppearance)
+        BookmarkManager.saveBookmark(for: openedFile)
+        state.load(url: openedFile, appearance: .system)
         addToRecentFiles(openedFile)
     }
 
@@ -240,6 +219,7 @@ struct ContentView: View {
             return false
         }
 
+        BookmarkManager.saveBookmark(for: url)
         openedFile = url
         return true
     }

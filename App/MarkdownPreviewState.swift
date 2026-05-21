@@ -18,12 +18,12 @@ struct RenderedDocument: Sendable {
         let title = url.deletingPathExtension().lastPathComponent
 
         do {
-            let (markdown, result) = try MarkdownDocumentLoader.withSecurityScopedAccess(to: url) {
-                let markdown = try MarkdownDocumentLoader.load(url: url)
+            let (markdown, result) = try MarkdownDocumentLoader.withSecurityScopedAccess(to: url) { resolvedURL in
+                let markdown = try MarkdownDocumentLoader.load(url: resolvedURL)
                 let renderResult = MarkdownRenderer.render(
                     markdown: markdown,
                     title: title,
-                    baseURL: url.deletingLastPathComponent(),
+                    baseURL: resolvedURL.deletingLastPathComponent(),
                     appearance: appearance
                 )
                 return (markdown, renderResult)
