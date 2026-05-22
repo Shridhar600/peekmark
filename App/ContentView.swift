@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var state = MarkdownPreviewState()
     @State private var selection: SidebarItem? = .preview
     @State private var searchText = ""
+    // @State private var isSearchPresented = false
     @State private var scrollToHeaderIndex: Int?
     
 
@@ -29,6 +30,7 @@ struct ContentView: View {
     @AppStorage("previewSpacing") private var selectedSpacing: PreviewSpacing = .compact
     @AppStorage("previewFontSize") private var selectedFontSize: Double = 14.5
     @AppStorage("previewAppearance") private var selectedAppearance: MarkdownAppearance = .system
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationSplitView {
@@ -40,6 +42,7 @@ struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 720, idealWidth: 1020, minHeight: 520, idealHeight: 780)
         .searchable(text: $searchText, prompt: "Search in document...")
+        // .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search in document...")
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         // toolbarBackground(.thinMaterial, for: .windowToolbar)
         .toolbar {
@@ -102,6 +105,9 @@ struct ContentView: View {
             updateStyle()
         }
         .onChange(of: selectedFontSize) {
+            updateStyle()
+        }
+        .onChange(of: colorScheme) {
             updateStyle()
         }
         .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
@@ -171,7 +177,12 @@ struct ContentView: View {
         } else {
             VStack(spacing: 0) {
                 MarkdownPreviewView(
+                    bodyHTML: state.renderedDocument.bodyHTML,
                     html: state.renderedDocument.html,
+                    appearance: selectedAppearance,
+                    font: selectedFont,
+                    fontSize: selectedFontSize,
+                    spacing: selectedSpacing,
                     searchText: searchText,
                     scrollToHeaderIndex: $scrollToHeaderIndex,
                     documentTitle: state.renderedDocument.title
@@ -266,29 +277,11 @@ struct ContentView: View {
                         .padding(.vertical, 4)
                     
                     VStack(alignment: .leading, spacing: 6) {
-                        Button(action: {
+                        MetadataToggleButton(isExpanded: isMetadataExpanded) {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 isMetadataExpanded.toggle()
                             }
-                        }) {
-                            HStack {
-                                Image(systemName: "info.circle")
-                                    .foregroundColor(.secondary)
-                                    .font(.footnote)
-                                Text("Metadata")
-                                    .font(.system(.footnote, design: .rounded))
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundColor(.secondary)
-                                    .rotationEffect(.degrees(isMetadataExpanded ? 90 : 0))
-                            }
-                            .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.plain)
-                        .contentShape(Rectangle())
                         
                         if isMetadataExpanded {
                             VStack(spacing: 6) {
@@ -591,5 +584,54 @@ struct ClearButtonStyle: ButtonStyle {
             .onHover { hovering in
                 isHovered = hovering
             }
+    }
+}
+
+struct MetadataToggleButton: View {
+    let isExpanded: Bool
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: "info.circle")
+                    .foregroundColor(.secondary)
+                    .font(.footnote)
+                Text("Metadata")
+                    .font(.system(.footnote, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(MetadataButtonStyle(isHovered: isHovered))
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+struct MetadataButtonStyle: ButtonStyle {
+    let isHovered: Bool
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .contentShape(Rectangle())
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(configuration.isPressed ? Color.secondary.opacity(0.16) : (isHovered ? Color.secondary.opacity(0.08) : Color.clear))
+            }
+            .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
     }
 }

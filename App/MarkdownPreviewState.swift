@@ -22,7 +22,8 @@ struct RenderedDocument: Sendable {
         appearance: MarkdownAppearance = .light,
         font: PreviewFont = .system,
         fontSize: Double = 14.5,
-        spacing: PreviewSpacing = .regular
+        spacing: PreviewSpacing = .regular,
+        isTransparent: Bool = false
     ) -> RenderedDocument {
         let title = url.deletingPathExtension().lastPathComponent
 
@@ -37,7 +38,8 @@ struct RenderedDocument: Sendable {
                     appearance: appearance,
                     font: font,
                     fontSize: fontSize,
-                    spacing: spacing
+                    spacing: spacing,
+                    isTransparent: isTransparent
                 )
                 return (markdown, renderResult, modDate)
             }
@@ -59,7 +61,8 @@ struct RenderedDocument: Sendable {
                 appearance: appearance,
                 font: font,
                 fontSize: fontSize,
-                spacing: spacing
+                spacing: spacing,
+                isTransparent: isTransparent
             )
             return RenderedDocument(
                 title: result.title,
@@ -78,7 +81,8 @@ struct RenderedDocument: Sendable {
         appearance: MarkdownAppearance,
         font: PreviewFont,
         fontSize: Double,
-        spacing: PreviewSpacing
+        spacing: PreviewSpacing,
+        isTransparent: Bool = false
     ) -> RenderedDocument {
         guard !bodyHTML.isEmpty else {
             return self
@@ -90,7 +94,8 @@ struct RenderedDocument: Sendable {
             appearance: appearance,
             font: font,
             fontSize: fontSize,
-            spacing: spacing
+            spacing: spacing,
+            isTransparent: isTransparent
         )
         return RenderedDocument(
             title: result.title,
@@ -139,9 +144,17 @@ final class MarkdownPreviewState {
         renderGeneration += 1
         let generation = renderGeneration
 
+        let resolvedAppearance: MarkdownAppearance
+        if appearance == .system {
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            resolvedAppearance = isDark ? .dark : .light
+        } else {
+            resolvedAppearance = appearance
+        }
+
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            let document = RenderedDocument.load(from: url, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
+            let document = RenderedDocument.load(from: url, appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: true)
             await MainActor.run {
                 guard self.renderGeneration == generation else { return }
                 self.renderedDocument = document
@@ -162,10 +175,19 @@ final class MarkdownPreviewState {
         currentURL: URL?
     ) {
         renderGeneration += 1
-        if let currentURL {
-            load(url: currentURL, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
+        
+        let resolvedAppearance: MarkdownAppearance
+        if appearance == .system {
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            resolvedAppearance = isDark ? .dark : .light
         } else {
-            renderedDocument = renderedDocument.withStyle(appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
+            resolvedAppearance = appearance
+        }
+
+        if let currentURL {
+            load(url: currentURL, appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing)
+        } else {
+            renderedDocument = renderedDocument.withStyle(appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: true)
         }
     }
 }

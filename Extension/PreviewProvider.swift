@@ -8,12 +8,16 @@ final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         let result: MarkdownRenderResult
 
         do {
+            let isDark = NSAppearance.current.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let resolvedAppearance: MarkdownAppearance = isDark ? .dark : .light
+            
             result = try MarkdownDocumentLoader.withSecurityScopedAccess(to: request.fileURL) { resolvedURL in
                 let markdown = try MarkdownDocumentLoader.load(url: resolvedURL)
                 return MarkdownRenderer.render(
                     markdown: markdown,
                     title: title,
-                    baseURL: resolvedURL.deletingLastPathComponent()
+                    baseURL: resolvedURL.deletingLastPathComponent(),
+                    appearance: resolvedAppearance
                 )
             }
         } catch {

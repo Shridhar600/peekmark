@@ -84,13 +84,14 @@ enum PeekMarkTheme {
         for appearance: MarkdownAppearance = .system,
         font: PreviewFont = .system,
         fontSize: Double = 14.5,
-        spacing: PreviewSpacing = .regular
+        spacing: PreviewSpacing = .regular,
+        isTransparent: Bool = false
     ) -> String {
         switch appearance {
         case .system:
             return css(
                 colorScheme: "light dark",
-                background: "#ffffff",
+                background: isTransparent ? "transparent" : "#ffffff",
                 text: "#1d1d1f",
                 secondaryText: "#86868b",
                 line: "#e5e5e7",
@@ -101,12 +102,12 @@ enum PeekMarkTheme {
                 font: font,
                 fontSize: fontSize,
                 spacing: spacing,
-                adaptiveDarkCSS: adaptiveDarkCSS
+                adaptiveDarkCSS: adaptiveDarkCSS(isTransparent: isTransparent)
             )
         case .light:
             return css(
                 colorScheme: "light",
-                background: "#ffffff",
+                background: isTransparent ? "transparent" : "#ffffff",
                 text: "#1d1d1f",
                 secondaryText: "#86868b",
                 line: "#e5e5e7",
@@ -122,7 +123,7 @@ enum PeekMarkTheme {
         case .dark:
             return css(
                 colorScheme: "dark",
-                background: "#1e1e1e",
+                background: isTransparent ? "transparent" : "#1e1e1e",
                 text: "#d2d2d7",
                 secondaryText: "#86868b",
                 line: "#323236",
@@ -138,12 +139,12 @@ enum PeekMarkTheme {
         }
     }
 
-    private static var adaptiveDarkCSS: String {
+    private static func adaptiveDarkCSS(isTransparent: Bool) -> String {
         """
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #1e1e1e;
+        --bg: \(isTransparent ? "transparent" : "#1e1e1e");
         --text: #d2d2d7;
         --secondary-text: #86868b;
         --line: #323236;
@@ -171,9 +172,6 @@ enum PeekMarkTheme {
         spacing: PreviewSpacing,
         adaptiveDarkCSS: String
     ) -> String {
-        let paddingVertical = Int(max(16, fontSize * 1.4))
-        let paddingHorizontal = Int(max(24, fontSize * 1.8))
-        let maxWidth = Int(fontSize * 48)
         let paragraphMargin = String(format: "%.2frem", fontSize * 0.042)
         let headingTopMargin = String(format: "%.2fem", fontSize * 0.07)
         let headingBottomMargin = String(format: "%.2fem", fontSize * 0.02)
@@ -194,6 +192,9 @@ enum PeekMarkTheme {
       --line-height: \(spacing.lineSpacing);
       --paragraph-margin: \(paragraphMargin);
       --heading-margin: \(headingTopMargin) 0 \(headingBottomMargin);
+      --padding-vertical: max(16px, calc(var(--font-size) * 1.4));
+      --padding-horizontal: max(24px, calc(var(--font-size) * 1.8));
+      --max-width: calc(var(--font-size) * 48);
     }
 
     * { box-sizing: border-box; }
@@ -204,7 +205,7 @@ enum PeekMarkTheme {
     }
 
     html {
-      background: transparent;
+      background: var(--bg);
       color: var(--text);
       font-family: var(--font-family);
       font-size: var(--font-size);
@@ -213,12 +214,12 @@ enum PeekMarkTheme {
 
     body {
       margin: 0;
-      padding: \(paddingVertical + 36)px \(paddingHorizontal)px \(paddingVertical)px \(paddingHorizontal)px;
-      background: transparent;
+      padding: calc(var(--padding-vertical) + 36px) var(--padding-horizontal) var(--padding-vertical) var(--padding-horizontal);
+      background: var(--bg);
     }
 
     main {
-      max-width: \(maxWidth)px;
+      max-width: var(--max-width);
       margin: 0 auto;
     }
 
@@ -260,6 +261,7 @@ enum PeekMarkTheme {
       border-radius: 4px;
       background: var(--code-bg);
       color: var(--text);
+      position: relative;
     }
 
     pre code {
@@ -324,10 +326,97 @@ enum PeekMarkTheme {
       color: var(--text);
     }
 
+    /* GFM Task List Styling */
+    li.task-list-item, li:has(input[type="checkbox"]) {
+      list-style-type: none !important;
+      display: flex !important;
+      align-items: flex-start !important;
+      margin-left: -1.3em;
+    }
+    li.task-list-item input[type="checkbox"], li:has(input[type="checkbox"]) input[type="checkbox"] {
+      margin-top: 0.25em !important;
+      margin-right: 6px !important;
+      flex-shrink: 0 !important;
+      transform: scale(1.15) !important;
+      cursor: default;
+    }
+    li.task-list-item p, li:has(input[type="checkbox"]) p {
+      margin: 0 !important;
+      display: inline-flex !important;
+      align-items: flex-start !important;
+    }
+
+    /* Code block action buttons styling */
+    .code-actions {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+      z-index: 10;
+    }
+    pre:hover .code-actions {
+      opacity: 1;
+    }
+    .code-action-btn {
+      background: rgba(128, 128, 128, 0.08);
+      border: 1px solid var(--soft-line);
+      border-radius: 4px;
+      padding: 4px 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--secondary-text);
+      transition: all 0.15s ease;
+    }
+    .code-action-btn:hover {
+      background: rgba(128, 128, 128, 0.18);
+      color: var(--text);
+      border-color: var(--line);
+    }
+    .code-action-btn svg {
+      width: 12px;
+      height: 12px;
+      fill: currentColor;
+    }
+    pre.word-wrap {
+      white-space: pre-wrap !important;
+      word-break: break-word !important;
+    }
+    pre.word-wrap code {
+      white-space: pre-wrap !important;
+      word-break: break-word !important;
+    }
+
+    /* Footnotes */
+    .footnotes {
+      font-size: 0.82rem;
+      color: var(--secondary-text);
+      margin-top: 2.5rem;
+      border-top: 1px solid var(--line);
+      padding-top: 1.2rem;
+    }
+    .footnote-ref a {
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footnote-backref {
+      text-decoration: none;
+      margin-left: 4px;
+      color: var(--secondary-text);
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .footnote-backref:hover {
+      color: var(--text);
+    }
+
     \(adaptiveDarkCSS)
 
     @media (max-width: 800px) {
-      body { padding: \(paddingVertical + 30)px 24px \(paddingVertical)px 24px; }
+      body { padding: calc(var(--padding-vertical) + 30px) 24px var(--padding-vertical) 24px; }
     }
     """
     }

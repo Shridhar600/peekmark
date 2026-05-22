@@ -16,10 +16,6 @@ enum HTMLSanitizer {
         output = removeAttributes(matching: #"(?i)\s+on[a-z0-9_-]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#, from: output)
         output = removeAttributes(matching: #"(?i)\s+(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2"#, from: output)
         output = removeAttributes(matching: #"(?i)\s+(href|src)\s*=\s*javascript:[^\s>]*"#, from: output)
-        output = removeAttributes(matching: #"(?i)\s+(href|src|srcset|poster|background|xlink:href)\s*=\s*(['"])\s*data:[^'"]*\2"#, from: output)
-        output = removeAttributes(matching: #"(?i)\s+(href|src|srcset|poster|background|xlink:href)\s*=\s*data:[^\s>]*"#, from: output)
-        output = removeAttributes(matching: #"(?i)\s+(href|src|srcset|poster|background|xlink:href)\s*=\s*(['"])\s*(https?:|//|file:)[^'"]*\2"#, from: output)
-        output = removeAttributes(matching: #"(?i)\s+(href|src|srcset|poster|background|xlink:href)\s*=\s*(https?:|//|file:)[^\s>]*"#, from: output)
         output = removeAttributes(matching: #"(?i)\s+style\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#, from: output)
         return output
     }
