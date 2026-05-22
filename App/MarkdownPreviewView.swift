@@ -2,7 +2,12 @@ import SwiftUI
 import WebKit
 
 struct MarkdownPreviewView: NSViewRepresentable {
+    let bodyHTML: String
     let html: String
+    let appearance: MarkdownAppearance
+    let font: PreviewFont
+    let fontSize: Double
+    let spacing: PreviewSpacing
     var searchText: String = ""
     @Binding var scrollToHeaderIndex: Int?
     let documentTitle: String
@@ -18,14 +23,44 @@ struct MarkdownPreviewView: NSViewRepresentable {
         configuration.websiteDataStore = .nonPersistent()
         configuration.suppressesIncrementalRendering = false
 
+        // Register the script message handler for copying code
+        let contentController = WKUserContentController()
+        contentController.add(context.coordinator, name: "copyCode")
+        configuration.userContentController = contentController
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = false
         webView.setValue(false, forKey: "drawsBackground")
+        
+        // Update webview appearance to match selected appearance
+        switch appearance {
+        case .system:
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            webView.appearance = NSAppearance(named: isDark ? .darkAqua : .aqua)
+        case .light:
+            webView.appearance = NSAppearance(named: .aqua)
+        case .dark:
+            webView.appearance = NSAppearance(named: .darkAqua)
+        }
+        
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        let resolvedAppearance: MarkdownAppearance
+        switch appearance {
+        case .system:
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            resolvedAppearance = isDark ? .dark : .light
+        case .light:
+            resolvedAppearance = .light
+        case .dark:
+            resolvedAppearance = .dark
+        }
+        
+        webView.appearance = NSAppearance(named: resolvedAppearance == .dark ? .darkAqua : .aqua)
+
         if let headerIndex = scrollToHeaderIndex {
             let script = """
             (function() {
@@ -42,28 +77,70 @@ struct MarkdownPreviewView: NSViewRepresentable {
             }
         }
 
-        guard context.coordinator.lastHTML != html || context.coordinator.lastSearchText != searchText else {
-            return
-        }
-        context.coordinator.lastHTML = html
-        context.coordinator.lastSearchText = searchText
-        context.coordinator.pendingScrollOrigin = webView.descendantScrollView?.contentView.bounds.origin
-        context.coordinator.allowNextMainFrameLoad = true
-        webView.loadHTMLString(html, baseURL: nil)
+        let appearanceChanged = context.coordinator.lastResolvedAppearance != resolvedAppearance
+        let contentChanged = context.coordinator.lastBodyHTML != bodyHTML || context.coordinator.lastSearchText != searchText || appearanceChanged
+        
+        if contentChanged {
+            context.coordinator.lastBodyHTML = bodyHTML
+            context.coordinator.lastHTML = html
+            context.coordinator.lastSearchText = searchText
+            context.coordinator.lastFont = font
+            context.coordinator.lastFontSize = fontSize
+            context.coordinator.lastSpacing = spacing
+            context.coordinator.lastResolvedAppearance = resolvedAppearance
+            
+            context.coordinator.pendingScrollOrigin = webView.descendantScrollView?.contentView.bounds.origin
+            context.coordinator.allowNextMainFrameLoad = true
+            webView.loadHTMLString(html, baseURL: nil)
 
-        if !searchText.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                context.coordinator.highlightSearch(in: webView, text: self.searchText)
+            if !searchText.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    context.coordinator.highlightSearch(in: webView, text: self.searchText)
+                }
             }
+        } else if context.coordinator.lastFontSize != fontSize || context.coordinator.lastFont != font || context.coordinator.lastSpacing != spacing {
+            context.coordinator.lastFont = font
+            context.coordinator.lastFontSize = fontSize
+            context.coordinator.lastSpacing = spacing
+            
+            let paragraphMargin = String(format: "%.2frem", fontSize * 0.042)
+            let headingTopMargin = String(format: "%.2fem", fontSize * 0.07)
+            let headingBottomMargin = String(format: "%.2fem", fontSize * 0.02)
+            let cssFamily = font.cssFamily.replacingOccurrences(of: "\"", with: "\\\"")
+            
+            let script = """
+            (function() {
+                var root = document.documentElement;
+                root.style.setProperty('--font-size', '\(fontSize)px');
+                root.style.setProperty('--font-family', '\(cssFamily)');
+                root.style.setProperty('--line-height', '\(spacing.lineSpacing)');
+                root.style.setProperty('--paragraph-margin', '\(paragraphMargin)');
+                root.style.setProperty('--heading-margin', '\(headingTopMargin) 0 \(headingBottomMargin)');
+            })();
+            """
+            webView.evaluateJavaScript(script, completionHandler: nil)
         }
     }
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        var lastBodyHTML = ""
         var lastHTML = ""
         var lastSearchText = ""
+        var lastFont: PreviewFont?
+        var lastFontSize: Double?
+        var lastSpacing: PreviewSpacing?
+        var lastResolvedAppearance: MarkdownAppearance?
         var allowNextMainFrameLoad = false
         var pendingScrollOrigin: NSPoint?
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "copyCode", let codeString = message.body as? String {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(codeString, forType: .string)
+            }
+        }
 
         func webView(
             _ webView: WKWebView,
@@ -72,6 +149,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
         ) {
             if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
                 if url.scheme == "about" {
+                    decisionHandler(.allow)
+                } else if url.fragment != nil && (url.host == nil || url.scheme == "file") {
                     decisionHandler(.allow)
                 } else {
                     NSWorkspace.shared.open(url)

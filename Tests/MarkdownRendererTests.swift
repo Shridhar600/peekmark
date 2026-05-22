@@ -37,9 +37,9 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(result.html.contains("border-radius: 8px"))
         XCTAssertFalse(result.html.contains("color-mix"))
         XCTAssertFalse(result.html.contains("#176b62"))
-        XCTAssertTrue(result.html.contains("--background: #ffffff;"))
-        XCTAssertTrue(result.html.contains("--text: #111111;"))
-        XCTAssertTrue(result.html.contains("background: var(--background);"))
+        XCTAssertTrue(result.html.contains("--bg: #ffffff;"))
+        XCTAssertTrue(result.html.contains("--text: #1d1d1f;"))
+        XCTAssertTrue(result.html.contains("background: var(--bg);"))
         XCTAssertTrue(result.html.contains("color: var(--text);"))
     }
 
@@ -47,9 +47,9 @@ final class MarkdownRendererTests: XCTestCase {
         let result = MarkdownRenderer.render(markdown: "# Dark", title: "Dark", appearance: .dark)
 
         XCTAssertTrue(result.html.contains("color-scheme: dark;"))
-        XCTAssertTrue(result.html.contains("--background: #111111;"))
-        XCTAssertTrue(result.html.contains("--text: #f5f5f5;"))
-        XCTAssertTrue(result.html.contains("background: var(--background);"))
+        XCTAssertTrue(result.html.contains("--bg: #1e1e1e;"))
+        XCTAssertTrue(result.html.contains("--text: #d2d2d7;"))
+        XCTAssertTrue(result.html.contains("background: var(--bg);"))
         XCTAssertTrue(result.html.contains("color: var(--text);"))
     }
 
@@ -59,9 +59,9 @@ final class MarkdownRendererTests: XCTestCase {
 
         XCTAssertTrue(result.html.contains("color-scheme: light dark;"))
         XCTAssertTrue(result.html.contains("@media (prefers-color-scheme: dark)"))
-        XCTAssertTrue(normalizedHTML.contains("html { background: var(--background); color: var(--text);"))
-        XCTAssertTrue(normalizedHTML.contains("body { margin: 0; padding: 28px; background: var(--background);"))
-        XCTAssertTrue(normalizedHTML.contains("main { max-width: 840px; margin: 0 auto; padding: 0; background: var(--background); color: var(--text);"))
+        XCTAssertTrue(normalizedHTML.contains("html { background: var(--bg); color: var(--text);"))
+        XCTAssertTrue(normalizedHTML.contains("body { margin: 0; padding: calc(var(--padding-vertical) + 36px) var(--padding-horizontal) var(--padding-vertical) var(--padding-horizontal); background: var(--bg);"))
+        XCTAssertTrue(normalizedHTML.contains("main { max-width: var(--max-width); margin: 0 auto;"))
     }
 
     func testCanRethemeExistingBodyWithoutChangingRenderedMarkdown() {
