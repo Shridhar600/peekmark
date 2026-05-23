@@ -12,18 +12,11 @@ struct ContentView: View {
     @State private var state = MarkdownPreviewState()
     @State private var selection: SidebarItem? = .preview
     @State private var searchText = ""
-    // @State private var isSearchPresented = false
     @State private var scrollToHeaderIndex: Int?
-    
 
-    
     // Typography popover toggle
     @State private var showTypographyPopover = false
-    
-    // Metadata HUD states
-    @State private var isMetadataExpanded = false
-    @State private var showAllMetadata = false
-    
+
     @State private var sessionRecentFiles: [URL] = []
     @AppStorage("recentFiles") private var recentFilesRaw: String = ""
     @AppStorage("previewFont") private var selectedFont: PreviewFont = .system
@@ -32,19 +25,40 @@ struct ContentView: View {
     @AppStorage("previewAppearance") private var selectedAppearance: MarkdownAppearance = .system
     @Environment(\.colorScheme) private var colorScheme
 
+    private struct StyleSettings: Equatable {
+        let appearance: MarkdownAppearance
+        let font: PreviewFont
+        let fontSize: Double
+        let spacing: PreviewSpacing
+        let colorScheme: ColorScheme
+    }
+
+    private var styleSettings: StyleSettings {
+        StyleSettings(
+            appearance: selectedAppearance,
+            font: selectedFont,
+            fontSize: selectedFontSize,
+            spacing: selectedSpacing,
+            colorScheme: colorScheme
+        )
+    }
+
     var body: some View {
         NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+            SidebarView(
+                openedFile: $openedFile,
+                sessionRecentFiles: $sessionRecentFiles,
+                recentFilesRaw: $recentFilesRaw,
+                state: state
+            )
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
             detailContent
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 720, idealWidth: 1020, minHeight: 520, idealHeight: 780)
         .searchable(text: $searchText, prompt: "Search in document...")
-        // .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Search in document...")
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        // toolbarBackground(.thinMaterial, for: .windowToolbar)
         .toolbar {
             // Left Action - Native placement for Open
             ToolbarItem(placement: .navigation) {
@@ -83,7 +97,11 @@ struct ContentView: View {
                 .keyboardShortcut("t", modifiers: .command)
                 .help("Adjust preview layout and typography")
                 .popover(isPresented: $showTypographyPopover, arrowEdge: .bottom) {
-                    typographyPopoverContent
+                    TypographyPopoverView(
+                        selectedFont: $selectedFont,
+                        selectedSpacing: $selectedSpacing,
+                        selectedFontSize: $selectedFontSize
+                    )
                 }
             }
         }
@@ -92,22 +110,10 @@ struct ContentView: View {
             sessionRecentFiles = persistentRecentFiles
             loadOpenedFile()
         }
-        .onChange(of: openedFile) {
+        .onChange(of: openedFile) { _, _ in
             loadOpenedFile()
         }
-        .onChange(of: selectedAppearance) {
-            updateStyle()
-        }
-        .onChange(of: selectedFont) {
-            updateStyle()
-        }
-        .onChange(of: selectedSpacing) {
-            updateStyle()
-        }
-        .onChange(of: selectedFontSize) {
-            updateStyle()
-        }
-        .onChange(of: colorScheme) {
+        .onChange(of: styleSettings) { _, _ in
             updateStyle()
         }
         .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
@@ -115,57 +121,6 @@ struct ContentView: View {
                 _ = await loadDroppedFile(from: providers)
             }
             return true
-        }
-    }
-
-    private var sidebar: some View {
-        List(selection: $openedFile) {
-            // Recent Documents Section
-            let recents = sessionRecentFiles
-            Section(header:
-                HStack {
-                    Text("Recent Documents")
-                        .font(.system(.subheadline, design: .rounded))
-                        .fontWeight(.semibold)
-                    Spacer()
-                    Button(action: {
-                        recentFilesRaw = ""
-                        sessionRecentFiles = []
-                        openedFile = nil
-                    }) {
-                        Text("Clear")
-                    }
-                    .buttonStyle(ClearButtonStyle())
-                    .disabled(recents.isEmpty)
-                }
-                .padding(.trailing, 16)
-                .padding(.bottom, 6)
-                .padding(.top, 4)
-            ) {
-                if recents.isEmpty {
-                    Text("No recent documents")
-                        .font(.system(.footnote, design: .rounded))
-                        .foregroundColor(.secondary)
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 4)
-                } else {
-                    ForEach(recents, id: \.self) { url in
-                        HStack {
-                            Label(url.deletingPathExtension().lastPathComponent, systemImage: "doc.text")
-                                .font(.system(.body, design: .rounded))
-                                .lineLimit(1)
-                            Spacer()
-                        }
-                        .contentShape(Rectangle())
-                        .tag(url as URL?)
-                    }
-                }
-            }
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("PeekMark")
-        .safeAreaInset(edge: .bottom) {
-            statsHUD
         }
     }
 
@@ -187,158 +142,25 @@ struct ContentView: View {
                     scrollToHeaderIndex: $scrollToHeaderIndex,
                     documentTitle: state.renderedDocument.title
                 )
-                .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
-                    Task {
-                        _ = await loadDroppedFile(from: providers)
-                    }
-                    return true
-                }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let url = openedFile {
-                    bottomFooter(for: url)
+                    BottomFooterView(url: url, selectedFontSize: $selectedFontSize)
                 }
             }
             .navigationTitle(state.renderedDocument.title)
         }
     }
 
-    private func breadcrumbView(for url: URL) -> some View {
-        let components = url.resolvingSymlinksInPath().pathComponents.filter { $0 != "/" && !$0.isEmpty }
-        let displayComponents = components.count > 3 ? ["…"] + components.suffix(3) : components
-        
-        return HStack(spacing: 4) {
-            ForEach(0..<displayComponents.count, id: \.self) { index in
-                let component = displayComponents[index]
-                let isLast = index == displayComponents.count - 1
-                
-                Text(component)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundColor(isLast ? .primary : .secondary)
-                
-                if !isLast {
-                    Text("›")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundColor(.secondary.opacity(0.6))
-                }
-            }
-        }
-        .lineLimit(1)
-        .truncationMode(.middle)
-    }
-
-    @ViewBuilder
-    private var statsHUD: some View {
-        if !state.renderedDocument.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Image(systemName: "chart.bar.doc.horizontal")
-                        .foregroundColor(.secondary)
-                        .font(.footnote)
-                    Text("Document Stats")
-                        .font(.system(.subheadline, design: .rounded))
-                        .fontWeight(.semibold)
-                }
-                .padding(.bottom, 2)
-                
-                HStack {
-                    Text("Words:")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(state.wordCount)")
-                        .fontWeight(.medium)
-                }
-                .font(.system(.footnote, design: .rounded))
-                
-                HStack {
-                    Text("Characters:")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(state.characterCount)")
-                        .fontWeight(.medium)
-                }
-                .font(.system(.footnote, design: .rounded))
-                
-                HStack {
-                    Text("Last Modified:")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text(lastModifiedString)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-                }
-                .font(.system(.footnote, design: .rounded))
-                
-                if !state.renderedDocument.metadata.isEmpty {
-                    Divider()
-                        .padding(.vertical, 4)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        MetadataToggleButton(isExpanded: isMetadataExpanded) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isMetadataExpanded.toggle()
-                            }
-                        }
-                        
-                        if isMetadataExpanded {
-                            VStack(spacing: 6) {
-                                let sortedKeys = state.renderedDocument.metadata.keys.sorted()
-                                let showAll = self.showAllMetadata || sortedKeys.count <= 4
-                                let visibleKeys = showAll ? sortedKeys : Array(sortedKeys.prefix(4))
-                                
-                                ForEach(visibleKeys, id: \.self) { key in
-                                    HStack(alignment: .top) {
-                                        Text(key)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(2)
-                                        Spacer()
-                                        Text(state.renderedDocument.metadata[key] ?? "")
-                                            .fontWeight(.medium)
-                                            .multilineTextAlignment(.trailing)
-                                            .lineLimit(3)
-                                    }
-                                    .font(.system(.footnote, design: .rounded))
-                                }
-                                
-                                if sortedKeys.count > 4 {
-                                    Button(action: {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            showAllMetadata.toggle()
-                                        }
-                                    }) {
-                                        Text(showAllMetadata ? "Show Less" : "Show \(sortedKeys.count - 4) More…")
-                                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                            .foregroundColor(.accentColor)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.top, 2)
-                                }
-                            }
-                            .padding(.top, 4)
-                        }
-                    }
-                }
-            }
-            .padding(12)
-            .modifier(StatsHUDBackgroundModifier())
-            .padding()
-        }
-    }
-
     private var persistentRecentFiles: [URL] {
-        recentFilesRaw.split(separator: "|").compactMap { URL(string: String($0)) }
-    }
-
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }()
-
-    private var lastModifiedString: String {
-        guard let date = state.renderedDocument.modificationDate else { return "--" }
-        return Self.dateFormatter.string(from: date)
+        recentFilesRaw.split(separator: "|").compactMap { string in
+            let str = String(string)
+            if str.hasPrefix("file://") {
+                return URL(string: str)
+            } else {
+                return URL(fileURLWithPath: str)
+            }
+        }
     }
 
     private func addToRecentFiles(_ url: URL) {
@@ -393,7 +215,7 @@ struct ContentView: View {
         addToRecentFiles(targetURL)
         
         if openedFile != standardizedURL {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.openedFile = standardizedURL
             }
         }
@@ -430,120 +252,6 @@ struct ContentView: View {
             }
         }
     }
-
-    private var typographyPopoverContent: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Typography & Style")
-                .font(.system(.headline, design: .rounded))
-                .padding(.bottom, 2)
-            
-            HStack {
-                Text("Font Family")
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundColor(.secondary)
-                Spacer()
-                Picker("Font Family", selection: $selectedFont) {
-                    ForEach(PreviewFont.allCases) { font in
-                        Text(font.displayName).tag(font)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-            }
-            
-            HStack {
-                Text("Spacing Density")
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundColor(.secondary)
-                Spacer()
-                Picker("Spacing Density", selection: $selectedSpacing) {
-                    ForEach(PreviewSpacing.allCases) { spacing in
-                        Text(spacing.displayName).tag(spacing)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-            }
-            
-            Divider()
-                .padding(.vertical, 2)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Font Size")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(Int(selectedFontSize)) px")
-                        .font(.system(.subheadline, design: .rounded))
-                        .monospacedDigit()
-                }
-                
-                HStack(spacing: 8) {
-                    Image(systemName: "textformat.size.smaller")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                    
-                    Slider(value: $selectedFontSize, in: 10...28, step: 1)
-                        .controlSize(.small)
-                    
-                    Image(systemName: "textformat.size.larger")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .padding(16)
-        .frame(width: 285)
-    }
-
-    private func bottomFooter(for url: URL) -> some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "folder")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 11))
-                
-                breadcrumbView(for: url)
-            }
-            .layoutPriority(0)
-            
-            Spacer()
-            
-            // Slider to increase/decrease font size
-            HStack(spacing: 8) {
-                Image(systemName: "textformat.size.smaller")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                
-                Slider(value: $selectedFontSize, in: 10...28, step: 1)
-                    .controlSize(.small)
-                    .frame(width: 120)
-                
-                Image(systemName: "textformat.size.larger")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-            }
-            .layoutPriority(1)
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 38)
-        .frame(maxHeight: 38)
-        .lineLimit(1)
-        .background(.bar)
-    }
-}
-
-private struct StatsHUDBackgroundModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 16.0, *) {
-            content
-                .glassEffect(.regular, in: .rect(cornerRadius: 12))
-        } else {
-            content
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
 }
 
 private struct EmptyStateView: View {
@@ -565,74 +273,4 @@ private struct EmptyStateView: View {
 
 #Preview {
     ContentView(openedFile: .constant(nil), openMarkdownFile: {})
-}
-
-struct ClearButtonStyle: ButtonStyle {
-    @State private var isHovered = false
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundColor(isHovered ? .primary : .secondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2.5)
-            .background {
-                Capsule()
-                    .fill(isHovered ? Color.secondary.opacity(0.15) : Color.secondary.opacity(0.08))
-            }
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: isHovered)
-            .onHover { hovering in
-                isHovered = hovering
-            }
-    }
-}
-
-struct MetadataToggleButton: View {
-    let isExpanded: Bool
-    let action: () -> Void
-    
-    @State private var isHovered = false
-    
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: "info.circle")
-                    .foregroundColor(.secondary)
-                    .font(.footnote)
-                Text("Metadata")
-                    .font(.system(.footnote, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(MetadataButtonStyle(isHovered: isHovered))
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
-    }
-}
-
-struct MetadataButtonStyle: ButtonStyle {
-    let isHovered: Bool
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
-            .contentShape(Rectangle())
-            .background {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(configuration.isPressed ? Color.secondary.opacity(0.16) : (isHovered ? Color.secondary.opacity(0.08) : Color.clear))
-            }
-            .scaleEffect(configuration.isPressed ? 0.99 : 1.0)
-    }
 }

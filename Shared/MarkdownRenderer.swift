@@ -105,10 +105,10 @@ enum MarkdownRenderer {
                 
                 let labelRange = match.range(at: 1)
                 let contentRange = match.range(at: 2)
-                let label = (line as NSString).substring(with: labelRange)
+                let matchedLabel = (line as NSString).substring(with: labelRange)
                 let content = (line as NSString).substring(with: contentRange)
                 
-                currentLabel = label
+                currentLabel = matchedLabel
                 currentContent = content
             } else if let label = currentLabel {
                 if line.hasPrefix("    ") || line.hasPrefix("\t") || line.trimmingCharacters(in: .whitespaces).isEmpty {

@@ -48,16 +48,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        let resolvedAppearance: MarkdownAppearance
-        switch appearance {
-        case .system:
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            resolvedAppearance = isDark ? .dark : .light
-        case .light:
-            resolvedAppearance = .light
-        case .dark:
-            resolvedAppearance = .dark
-        }
+        let resolvedAppearance = appearance.resolved
         
         webView.appearance = NSAppearance(named: resolvedAppearance == .dark ? .darkAqua : .aqua)
 
@@ -71,7 +62,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
             })();
             """
             webView.evaluateJavaScript(script) { _, _ in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.scrollToHeaderIndex = nil
                 }
             }
@@ -94,8 +85,10 @@ struct MarkdownPreviewView: NSViewRepresentable {
             webView.loadHTMLString(html, baseURL: nil)
 
             if !searchText.isEmpty {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    context.coordinator.highlightSearch(in: webView, text: self.searchText)
+                let textToHighlight = self.searchText
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(0.3))
+                    context.coordinator.highlightSearch(in: webView, text: textToHighlight)
                 }
             }
         } else {

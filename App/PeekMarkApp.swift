@@ -68,11 +68,13 @@ struct PeekMarkApp: App {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.begin { response in
-            guard response == .OK, let url = panel.url else {
-                return
+            Task { @MainActor in
+                guard response == .OK, let url = panel.url else {
+                    return
+                }
+                BookmarkManager.saveBookmark(for: url)
+                openedFile = url
             }
-            BookmarkManager.saveBookmark(for: url)
-            openedFile = url
         }
     }
 }
