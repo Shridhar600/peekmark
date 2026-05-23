@@ -2,42 +2,202 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
+    private enum SidebarItem: Hashable {
+        case preview
+    }
+
     @Binding var openedFile: URL?
-    let openDocument: () -> Void
+    let openMarkdownFile: () -> Void
 
     @State private var state = MarkdownPreviewState()
+    @State private var selection: SidebarItem? = .preview
+    @State private var searchText = ""
+    @State private var scrollToHeaderIndex: Int?
+
+    // Typography popover toggle
+    @State private var showTypographyPopover = false
+
+    @State private var sessionRecentFiles: [URL] = []
+    @AppStorage("recentFiles") private var recentFilesRaw: String = ""
+    @AppStorage("previewFont") private var selectedFont: PreviewFont = .system
+    @AppStorage("previewSpacing") private var selectedSpacing: PreviewSpacing = .compact
+    @AppStorage("previewFontSize") private var selectedFontSize: Double = 14.5
+    @AppStorage("previewAppearance") private var selectedAppearance: MarkdownAppearance = .system
+    @Environment(\.colorScheme) private var colorScheme
+
+    private struct StyleSettings: Equatable {
+        let appearance: MarkdownAppearance
+        let font: PreviewFont
+        let fontSize: Double
+        let spacing: PreviewSpacing
+        let colorScheme: ColorScheme
+    }
+
+    private var styleSettings: StyleSettings {
+        StyleSettings(
+            appearance: selectedAppearance,
+            font: selectedFont,
+            fontSize: selectedFontSize,
+            spacing: selectedSpacing,
+            colorScheme: colorScheme
+        )
+    }
 
     var body: some View {
-        contentView
-            .frame(minWidth: 620, idealWidth: 860, minHeight: 480, idealHeight: 720)
-            .navigationTitle(state.renderedDocument.title)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: openDocument) {
-                        Label("Open", systemImage: "doc.badge.plus")
+        NavigationSplitView {
+            SidebarView(
+                openedFile: $openedFile,
+                sessionRecentFiles: $sessionRecentFiles,
+                recentFilesRaw: $recentFilesRaw,
+                state: state
+            )
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+        } detail: {
+            detailContent
+        }
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 720, idealWidth: 1020, minHeight: 520, idealHeight: 780)
+        .searchable(text: $searchText, prompt: "Search in document...")
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .toolbar {
+            // Left Action - Native placement for Open
+            ToolbarItem(placement: .navigation) {
+                Button(action: openMarkdownFile) {
+                    Label("Open File...", systemImage: "doc.badge.plus")
+                }
+                .keyboardShortcut("o", modifiers: .command)
+                .help("Open Markdown File")
+            }
+
+            // Right Actions for Perfect Spacing and Alignment
+            ToolbarItemGroup(placement: .primaryAction) {
+                if let url = openedFile {
+                    ShareLink(item: url) {
+                        Label("Share", systemImage: "square.and.arrow.up")
                     }
-                    .help("Open Markdown File (⌘O)")
+                    .help("Share Markdown File")
+                    .disabled(state.renderedDocument.isEmpty)
+                } else {
+                    Button(action: {}) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(true)
+                    .help("Share Markdown File")
+                }
+
+                Button(action: copyMarkdown) {
+                    Label("Copy Source", systemImage: "doc.on.doc")
+                }
+                .help("Copy Markdown Source")
+                .disabled(state.renderedDocument.isEmpty)
+
+                Button(action: { showTypographyPopover.toggle() }) {
+                    Label("Text Style", systemImage: "textformat.size")
+                }
+                .keyboardShortcut("t", modifiers: .command)
+                .help("Adjust preview layout and typography")
+                .popover(isPresented: $showTypographyPopover, arrowEdge: .bottom) {
+                    TypographyPopoverView(
+                        selectedFont: $selectedFont,
+                        selectedSpacing: $selectedSpacing,
+                        selectedFontSize: $selectedFontSize
+                    )
                 }
             }
-            .onAppear(perform: loadOpenedFile)
-            .onChange(of: openedFile) {
-                loadOpenedFile()
+        }
+        .onAppear {
+            selectedAppearance = .system
+            sessionRecentFiles = persistentRecentFiles
+            loadOpenedFile()
+        }
+        .onChange(of: openedFile) { _, _ in
+            loadOpenedFile()
+        }
+        .onChange(of: styleSettings) { _, _ in
+            updateStyle()
+        }
+        .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
+            Task {
+                _ = await loadDroppedFile(from: providers)
             }
-            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                Task {
-                    _ = await loadDroppedFile(from: providers)
-                }
-                return true
-            }
+            return true
+        }
     }
 
     @ViewBuilder
-    private var contentView: some View {
+    private var detailContent: some View {
         if state.renderedDocument.isEmpty {
-            EmptyStateView()
+            EmptyStateView(openMarkdownFile: openMarkdownFile)
+                .navigationTitle("PeekMark")
         } else {
-            MarkdownPreviewView(html: state.renderedDocument.html)
+            VStack(spacing: 0) {
+                MarkdownPreviewView(
+                    bodyHTML: state.renderedDocument.bodyHTML,
+                    html: state.renderedDocument.html,
+                    appearance: selectedAppearance,
+                    font: selectedFont,
+                    fontSize: selectedFontSize,
+                    spacing: selectedSpacing,
+                    searchText: searchText,
+                    scrollToHeaderIndex: $scrollToHeaderIndex,
+                    documentTitle: state.renderedDocument.title
+                )
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let url = openedFile {
+                    BottomFooterView(url: url, selectedFontSize: $selectedFontSize)
+                }
+            }
+            .navigationTitle(state.renderedDocument.title)
         }
+    }
+
+    private var persistentRecentFiles: [URL] {
+        recentFilesRaw.split(separator: "|").compactMap { string in
+            let str = String(string)
+            if str.hasPrefix("file://") {
+                return URL(string: str)
+            } else {
+                return URL(fileURLWithPath: str)
+            }
+        }
+    }
+
+    private func addToRecentFiles(_ url: URL) {
+        let standardURL = url.resolvingSymlinksInPath()
+        
+        // 1. Update persistent storage (always move to top for next launch)
+        var persistent = persistentRecentFiles.filter { $0 != standardURL }
+        persistent.insert(standardURL, at: 0)
+        if persistent.count > 5 {
+            persistent = Array(persistent.prefix(5))
+        }
+        recentFilesRaw = persistent.map { $0.absoluteString }.joined(separator: "|")
+        
+        // 2. Update session recents for active UI (do not re-order if already present)
+        if !sessionRecentFiles.contains(standardURL) {
+            sessionRecentFiles.insert(standardURL, at: 0)
+            if sessionRecentFiles.count > 5 {
+                sessionRecentFiles = Array(sessionRecentFiles.prefix(5))
+            }
+        }
+    }
+
+    private func updateStyle() {
+        state.reloadForStyle(
+            appearance: selectedAppearance,
+            font: selectedFont,
+            fontSize: selectedFontSize,
+            spacing: selectedSpacing,
+            currentURL: nil
+        )
+    }
+
+    private func copyMarkdown() {
+        guard !state.renderedDocument.isEmpty else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(state.renderedDocument.rawMarkdown, forType: .string)
     }
 
     private func loadOpenedFile() {
@@ -45,7 +205,20 @@ struct ContentView: View {
             state.clear()
             return
         }
-        state.load(url: openedFile)
+        let standardizedURL = openedFile.standardizedFileURL
+        let targetURL = BookmarkManager.resolveBookmark(for: standardizedURL) ?? standardizedURL
+        state.load(url: targetURL, appearance: selectedAppearance, font: selectedFont, fontSize: selectedFontSize, spacing: selectedSpacing)
+        
+        // Industry-standard recent documents sorting behavior:
+        // Do not instantly re-sort the sidebar list if the document is already in the recents list.
+        // This avoids layout jumping under the cursor. It will be sorted on next app launch or when a new file is added.
+        addToRecentFiles(targetURL)
+        
+        if openedFile != standardizedURL {
+            Task { @MainActor in
+                self.openedFile = standardizedURL
+            }
+        }
     }
 
     private func loadDroppedFile(from providers: [NSItemProvider]) async -> Bool {
@@ -57,7 +230,11 @@ struct ContentView: View {
             return false
         }
 
-        openedFile = url
+        let standardizedURL = url.standardizedFileURL
+        BookmarkManager.saveBookmark(for: standardizedURL)
+        await MainActor.run {
+            openedFile = standardizedURL
+        }
         return true
     }
 
@@ -78,26 +255,22 @@ struct ContentView: View {
 }
 
 private struct EmptyStateView: View {
+    let openMarkdownFile: () -> Void
+
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "doc.richtext")
-                .font(.system(size: 44, weight: .regular))
-                .foregroundStyle(.secondary)
-                .symbolRenderingMode(.hierarchical)
-
-            Text("Open a Markdown File")
-                .font(.title2.weight(.semibold))
-
+        ContentUnavailableView {
+            Label("Open a Markdown File", systemImage: "doc.richtext")
+        } description: {
             Text("Use File > Open, drop a .md file here, or preview from Finder with Space.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        } actions: {
+            Button("Open File...", action: openMarkdownFile)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
         }
-        .padding(36)
-        .frame(maxWidth: 420)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 #Preview {
-    ContentView(openedFile: .constant(nil), openDocument: {})
+    ContentView(openedFile: .constant(nil), openMarkdownFile: {})
 }

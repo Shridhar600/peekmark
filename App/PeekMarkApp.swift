@@ -16,11 +16,6 @@ final class PeekMarkAppDelegate: NSObject, NSApplicationDelegate {
         urls.forEach(open)
     }
 
-    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
-        open(URL(fileURLWithPath: filename))
-        return true
-    }
-
     private func open(_ url: URL) {
         guard let openDocument else {
             pendingOpenURLs.append(url)
@@ -43,26 +38,23 @@ struct PeekMarkApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(openedFile: $openedFile, openDocument: openMarkdownFile)
+            ContentView(openedFile: $openedFile, openMarkdownFile: openMarkdownFile)
+                .containerBackground(.windowBackground, for: .window)
                 .onAppear {
                     appDelegate.setOpenDocumentHandler { url in
+                        BookmarkManager.saveBookmark(for: url)
                         openedFile = url
                     }
                 }
                 .onOpenURL { url in
+                    BookmarkManager.saveBookmark(for: url)
                     openedFile = url
                 }
         }
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowBackgroundDragBehavior(.enabled)
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) { }
-            CommandGroup(after: .newItem) {
-                Button("Open Markdown...") {
-                    openMarkdownFile()
-                }
-                .keyboardShortcut("o")
-            }
         }
     }
 
@@ -76,10 +68,13 @@ struct PeekMarkApp: App {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.begin { response in
-            guard response == .OK, let url = panel.url else {
-                return
+            Task { @MainActor in
+                guard response == .OK, let url = panel.url else {
+                    return
+                }
+                BookmarkManager.saveBookmark(for: url)
+                openedFile = url
             }
-            openedFile = url
         }
     }
 }
