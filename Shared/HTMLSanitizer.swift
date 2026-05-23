@@ -1,6 +1,32 @@
 import Foundation
 
 enum HTMLSanitizer {
+    private static let tagTags = "script|iframe|object|embed|style|link|meta|base"
+    private static let pairedTagsRegex = try! NSRegularExpression(
+        pattern: "(?is)<\\s*(\(tagTags))\\b[^>]*>.*?<\\s*/\\s*\\1\\s*>",
+        options: []
+    )
+    private static let singleTagsRegex = try! NSRegularExpression(
+        pattern: "(?is)<\\s*(\(tagTags))\\b[^>]*\\/?\\s*>",
+        options: []
+    )
+    private static let eventHandlersRegex = try! NSRegularExpression(
+        pattern: #"(?i)\s+on[a-z0-9_-]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#,
+        options: []
+    )
+    private static let jsURLQuotedRegex = try! NSRegularExpression(
+        pattern: #"(?i)\s+(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2"#,
+        options: []
+    )
+    private static let jsURLUnquotedRegex = try! NSRegularExpression(
+        pattern: #"(?i)\s+(href|src)\s*=\s*javascript:[^\s>]*"#,
+        options: []
+    )
+    private static let styleAttrRegex = try! NSRegularExpression(
+        pattern: #"(?i)\s+style\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#,
+        options: []
+    )
+
     static func escape(_ value: String) -> String {
         value
             .replacingOccurrences(of: "&", with: "&amp;")
@@ -12,37 +38,16 @@ enum HTMLSanitizer {
 
     static func sanitizeGeneratedHTML(_ html: String) -> String {
         var output = html
-        output = removeTags(["script", "iframe", "object", "embed", "style", "link", "meta", "base"], from: output)
-        output = removeAttributes(matching: #"(?i)\s+on[a-z0-9_-]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#, from: output)
-        output = removeAttributes(matching: #"(?i)\s+(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2"#, from: output)
-        output = removeAttributes(matching: #"(?i)\s+(href|src)\s*=\s*javascript:[^\s>]*"#, from: output)
-        output = removeAttributes(matching: #"(?i)\s+style\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#, from: output)
+        output = replace(regex: pairedTagsRegex, in: output, with: "")
+        output = replace(regex: singleTagsRegex, in: output, with: "")
+        output = replace(regex: eventHandlersRegex, in: output, with: "")
+        output = replace(regex: jsURLQuotedRegex, in: output, with: "")
+        output = replace(regex: jsURLUnquotedRegex, in: output, with: "")
+        output = replace(regex: styleAttrRegex, in: output, with: "")
         return output
     }
 
-    private static func removeTags(_ tags: [String], from html: String) -> String {
-        tags.reduce(html) { partial, tag in
-            let withoutPairedTags = replace(
-                pattern: #"(?is)<\s*\#(tag)\b[^>]*>.*?<\s*/\s*\#(tag)\s*>"#,
-                in: partial,
-                with: ""
-            )
-            return replace(
-                pattern: #"(?is)<\s*\#(tag)\b[^>]*\/?\s*>"#,
-                in: withoutPairedTags,
-                with: ""
-            )
-        }
-    }
-
-    private static func removeAttributes(matching pattern: String, from html: String) -> String {
-        replace(pattern: pattern, in: html, with: "")
-    }
-
-    private static func replace(pattern: String, in value: String, with replacement: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return value
-        }
+    private static func replace(regex: NSRegularExpression, in value: String, with replacement: String) -> String {
         let range = NSRange(value.startIndex..<value.endIndex, in: value)
         return regex.stringByReplacingMatches(in: value, range: range, withTemplate: replacement)
     }

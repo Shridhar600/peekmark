@@ -1,6 +1,4 @@
 import Foundation
-import CoreLocation
-import Accessibility
 import Markdown
 
 public struct HeadingItem: Identifiable, Hashable, Sendable {
@@ -15,11 +13,15 @@ public struct HeadingItem: Identifiable, Hashable, Sendable {
 }
 
 public struct HeadingExtractor {
-    public static func extract(from markdown: String) -> [HeadingItem] {
-        let document = Document(parsing: markdown)
+    public static func extract(from document: Document) -> [HeadingItem] {
         var visitor = HeadingVisitor()
         visitor.visit(document)
         return visitor.headings
+    }
+
+    public static func extract(from markdown: String) -> [HeadingItem] {
+        let document = Document(parsing: markdown)
+        return extract(from: document)
     }
 }
 

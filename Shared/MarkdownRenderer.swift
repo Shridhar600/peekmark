@@ -6,9 +6,13 @@ struct MarkdownRenderResult {
     let html: String
     let bodyHTML: String
     let metadata: [String: String]
+    let headings: [HeadingItem]
 }
 
 enum MarkdownRenderer {
+    private static let footnoteDefinitionRegex = try! NSRegularExpression(pattern: "^\\[\\^([^\\]]+)\\]:\\s*(.*)$", options: [])
+    private static let footnoteReferenceRegex = try! NSRegularExpression(pattern: "\\[\\^([^\\]]+)\\]", options: [])
+
     static func render(
         markdown: String,
         title: String,
@@ -20,8 +24,8 @@ enum MarkdownRenderer {
         isTransparent: Bool = false
     ) -> MarkdownRenderResult {
         let (metadata, content) = parseFrontMatter(markdown)
-        let bodyHTML = renderBody(markdown: content, baseURL: baseURL)
-        return wrapHTML(title: title, bodyHTML: bodyHTML, metadata: metadata, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent)
+        let (bodyHTML, headings) = renderBody(markdown: content, baseURL: baseURL)
+        return wrapHTML(title: title, bodyHTML: bodyHTML, metadata: metadata, headings: headings, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent)
     }
 
     static func renderError(
@@ -38,7 +42,7 @@ enum MarkdownRenderer {
         <h1>\(HTMLSanitizer.escape(title))</h1>
         <blockquote>\(escapedMessage)</blockquote>
         """
-        return wrapHTML(title: title, bodyHTML: body, metadata: [:], appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent)
+        return wrapHTML(title: title, bodyHTML: body, metadata: [:], headings: [], appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent)
     }
 
     static func parseFrontMatter(_ markdown: String) -> (metadata: [String: String], content: String) {
@@ -75,12 +79,13 @@ enum MarkdownRenderer {
         }
     }
 
-    static func renderBody(markdown: String, baseURL: URL? = nil) -> String {
+    static func renderBody(markdown: String, baseURL: URL? = nil) -> (bodyHTML: String, headings: [HeadingItem]) {
         let (processedMarkdown, footnotesHTML) = processFootnotes(markdown)
         let document = Document(parsing: processedMarkdown)
         let body = HTMLSanitizer.sanitizeGeneratedHTML(HTMLFormatter.format(document))
         let bodyWithImages = embedLocalImages(in: body, baseURL: baseURL)
-        return bodyWithImages + footnotesHTML
+        let headings = HeadingExtractor.extract(from: document)
+        return (bodyWithImages + footnotesHTML, headings)
     }
 
     private static func processFootnotes(_ markdown: String) -> (processedMarkdown: String, footnotesHTML: String) {
@@ -92,11 +97,8 @@ enum MarkdownRenderer {
         var currentLabel: String? = nil
         var currentContent = ""
         
-        let definitionRegex = try? NSRegularExpression(pattern: "^\\[\\^([^\\]]+)\\]:\\s*(.*)$", options: [])
-        
         for line in lines {
-            if let regex = definitionRegex,
-               let match = regex.firstMatch(in: line, options: [], range: NSRange(location: 0, length: line.utf16.count)) {
+            if let match = footnoteDefinitionRegex.firstMatch(in: line, options: [], range: NSRange(location: 0, length: line.utf16.count)) {
                 if let label = currentLabel {
                     footnotes.append((label, currentContent.trimmingCharacters(in: .whitespacesAndNewlines)))
                 }
@@ -127,20 +129,18 @@ enum MarkdownRenderer {
         
         processed = bodyLines.joined(separator: "\n")
         
-        let refRegex = try? NSRegularExpression(pattern: "\\[\\^([^\\]]+)\\]", options: [])
-        if let refRegex = refRegex {
-            let nsProcessed = processed as NSString
-            let matches = refRegex.matches(in: processed, options: [], range: NSRange(location: 0, length: nsProcessed.length))
+        let refRegex = footnoteReferenceRegex
+        let nsProcessed = processed as NSString
+        let matches = refRegex.matches(in: processed, options: [], range: NSRange(location: 0, length: nsProcessed.length))
+        
+        for match in matches.reversed() {
+            let fullRange = match.range(at: 0)
+            let labelRange = match.range(at: 1)
+            let label = nsProcessed.substring(with: labelRange)
             
-            for match in matches.reversed() {
-                let fullRange = match.range(at: 0)
-                let labelRange = match.range(at: 1)
-                let label = nsProcessed.substring(with: labelRange)
-                
-                if footnotes.contains(where: { $0.label == label }) {
-                    let htmlRef = "<sup class=\"footnote-ref\" id=\"fnref-\(label)\"><a href=\"#fn-\(label)\">\(label)</a></sup>"
-                    processed = (processed as NSString).replacingCharacters(in: fullRange, with: htmlRef)
-                }
+            if footnotes.contains(where: { $0.label == label }) {
+                let htmlRef = "<sup class=\"footnote-ref\" id=\"fnref-\(label)\"><a href=\"#fn-\(label)\">\(label)</a></sup>"
+                processed = (processed as NSString).replacingCharacters(in: fullRange, with: htmlRef)
             }
         }
         
@@ -170,6 +170,7 @@ enum MarkdownRenderer {
         title: String,
         bodyHTML: String,
         metadata: [String: String] = [:],
+        headings: [HeadingItem] = [],
         appearance: MarkdownAppearance,
         font: PreviewFont = .system,
         fontSize: Double = 14.5,
@@ -181,7 +182,8 @@ enum MarkdownRenderer {
             title: title,
             html: documentHTML(title: escapedTitle, body: bodyHTML, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent),
             bodyHTML: bodyHTML,
-            metadata: metadata
+            metadata: metadata,
+            headings: headings
         )
     }
 
@@ -194,54 +196,66 @@ enum MarkdownRenderer {
         spacing: PreviewSpacing,
         isTransparent: Bool
     ) -> String {
-        let highlightCSSLink: String
-        switch appearance {
-        case .system:
-            highlightCSSLink = """
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)">
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
-            """
-        case .light:
-            highlightCSSLink = """
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
-            """
-        case .dark:
-            highlightCSSLink = """
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-            """
-        }
+        let isDark = appearance == .dark
+        let highlightCSSLink = """
+        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"\(isDark ? " disabled" : "")>
+        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"\(!isDark ? " disabled" : "")>
+        """
 
         return """
         <!doctype html>
         <html data-appearance="\(appearance.rawValue)">
         <head>
           <meta charset="utf-8">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; img-src 'self' data:;">
           <script>
-            // Override getComputedStyle to trick Mermaid's theme detection when body background is transparent
+            // Mock matchMedia to match resolved appearance
+            (function() {
+              const originalMatchMedia = window.matchMedia;
+              window.matchMedia = function(query) {
+                if (query.includes('prefers-color-scheme')) {
+                  const appearance = document.documentElement.getAttribute('data-appearance') || 'light';
+                  let isDark = appearance === 'dark';
+                  if (appearance === 'system') {
+                    isDark = originalMatchMedia && originalMatchMedia('(prefers-color-scheme: dark)').matches;
+                  }
+                  const matches = query.includes('dark') ? isDark : !isDark;
+                  return {
+                    matches: matches,
+                    media: query,
+                    onchange: null,
+                    addListener: function() {},
+                    removeListener: function() {},
+                    addEventListener: function() {},
+                    removeEventListener: function() {},
+                    dispatchEvent: function() { return false; }
+                  };
+                }
+                return originalMatchMedia ? originalMatchMedia(query) : { matches: false, media: query };
+              };
+            })();
+
+            // Override getComputedStyle specifically for document.body to trick Mermaid's theme detection when body is transparent
             (function() {
               const originalGetComputedStyle = window.getComputedStyle;
               window.getComputedStyle = function(element, pseudoElt) {
                 const style = originalGetComputedStyle(element, pseudoElt);
-                return new Proxy(style, {
-                  get(target, prop) {
-                    if (prop === 'backgroundColor') {
-                      const val = target[prop];
-                      if (val === 'rgba(0, 0, 0, 0)' || val === 'transparent') {
-                        const appearance = document.documentElement.getAttribute('data-appearance') || 'light';
-                        let isDark = appearance === 'dark';
-                        if (appearance === 'system') {
-                          isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (element === document.body || element === document.documentElement) {
+                  return new Proxy(style, {
+                    get(target, prop) {
+                      if (prop === 'backgroundColor') {
+                        const val = target[prop];
+                        if (val === 'rgba(0, 0, 0, 0)' || val === 'transparent') {
+                          const appearance = document.documentElement.getAttribute('data-appearance') || 'light';
+                          return appearance === 'dark' ? 'rgb(30, 30, 30)' : 'rgb(255, 255, 255)';
                         }
-                        return isDark ? 'rgb(30, 30, 30)' : 'rgb(255, 255, 255)';
                       }
+                      const value = target[prop];
+                      return typeof value === 'function' ? value.bind(target) : value;
                     }
-                    const value = target[prop];
-                    if (typeof value === 'function') {
-                      return value.bind(target);
-                    }
-                    return value;
-                  }
-                });
+                  });
+                }
+                return style;
               };
             })();
           </script>
@@ -324,6 +338,7 @@ enum MarkdownRenderer {
                 var pre = codeBlock.parentNode;
                 var div = document.createElement('div');
                 div.className = 'mermaid';
+                div.setAttribute('data-mermaid-src', codeBlock.textContent);
                 div.textContent = codeBlock.textContent;
                 pre.parentNode.replaceChild(div, pre);
             });
@@ -390,6 +405,7 @@ enum MarkdownRenderer {
           </script>          <!-- Load Mermaid ESM -->
           <script type="module">
             import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+            window.mermaid = mermaid;
 
             var appearance = document.documentElement.getAttribute('data-appearance') || 'light';
             var isDark = appearance === 'dark';
@@ -399,7 +415,7 @@ enum MarkdownRenderer {
             mermaid.initialize({
               startOnLoad: true,
               theme: isDark ? 'dark' : 'default',
-              securityLevel: 'loose'
+              securityLevel: 'strict'
             });
           </script>
         </body>
@@ -416,6 +432,11 @@ enum MarkdownRenderer {
 }
 
 private enum LocalImageDataURIRewriter {
+    private static let imgSrcRegex = try! NSRegularExpression(
+        pattern: #"(<img\b[^>]*?\bsrc=")([^"]*)(")"#,
+        options: [.caseInsensitive]
+    )
+
     private static let supportedMimeTypes = [
         "png": "image/png",
         "jpg": "image/jpeg",
@@ -431,9 +452,7 @@ private enum LocalImageDataURIRewriter {
         aggregateByteLimit: Int = 12 * 1024 * 1024
     ) -> String {
         let nsHTML = html as NSString
-        guard let regex = try? NSRegularExpression(pattern: #"(<img\b[^>]*?\bsrc=")([^"]*)(")"#, options: [.caseInsensitive]) else {
-            return html
-        }
+        let regex = imgSrcRegex
         let matches = regex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length))
         guard !matches.isEmpty else {
             return html
