@@ -4,12 +4,14 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DERIVED_DATA_DIR="$ROOT_DIR/.build/DerivedData"
-APP_PATH="$DERIVED_DATA_DIR/Build/Products/Debug/PeekMark.app"
+CONFIGURATION="${CONFIGURATION:-Debug}"
+CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
+APP_PATH="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/PeekMark.app"
 INSTALL_PATH="/Applications/PeekMark.app"
 SYSTEM_LOG="$ROOT_DIR/docs/system-changes.md"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
-export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+
 
 log_system_change() {
   mkdir -p "$(dirname "$SYSTEM_LOG")"
@@ -116,8 +118,9 @@ xcodegen --project "$ROOT_DIR"
 xcodebuild \
   -project "$ROOT_DIR/PeekMark.xcodeproj" \
   -scheme "PeekMark" \
-  -configuration Debug \
+  -configuration "$CONFIGURATION" \
   -derivedDataPath "$DERIVED_DATA_DIR" \
+  CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
   clean build
 
 verify_clean_entitlements "$APP_PATH" true true

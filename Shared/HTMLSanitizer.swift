@@ -2,30 +2,42 @@ import Foundation
 
 enum HTMLSanitizer {
     private static let tagTags = "script|iframe|object|embed|style|link|meta|base"
-    private static let pairedTagsRegex = try! NSRegularExpression(
-        pattern: "(?is)<\\s*(\(tagTags))\\b[^>]*>.*?<\\s*/\\s*\\1\\s*>",
-        options: []
-    )
-    private static let singleTagsRegex = try! NSRegularExpression(
-        pattern: "(?is)<\\s*(\(tagTags))\\b[^>]*\\/?\\s*>",
-        options: []
-    )
-    private static let eventHandlersRegex = try! NSRegularExpression(
-        pattern: #"(?i)\s+on[a-z0-9_-]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#,
-        options: []
-    )
-    private static let jsURLQuotedRegex = try! NSRegularExpression(
-        pattern: #"(?i)\s+(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2"#,
-        options: []
-    )
-    private static let jsURLUnquotedRegex = try! NSRegularExpression(
-        pattern: #"(?i)\s+(href|src)\s*=\s*javascript:[^\s>]*"#,
-        options: []
-    )
-    private static let styleAttrRegex = try! NSRegularExpression(
-        pattern: #"(?i)\s+style\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#,
-        options: []
-    )
+    private static let pairedTagsRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: "(?is)<\\s*(\(tagTags))\\b[^>]*>(?>[^<]|<(?!/\\s*\\1\\s*>))*<\\s*/\\s*\\1\\s*>",
+            options: []
+        )
+    }()
+    private static let singleTagsRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: "(?is)<\\s*(\(tagTags))\\b[^>]*\\/?\\s*>",
+            options: []
+        )
+    }()
+    private static let eventHandlersRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)\s+on[a-z0-9_-]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#,
+            options: []
+        )
+    }()
+    private static let jsURLQuotedRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)\s+(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2"#,
+            options: []
+        )
+    }()
+    private static let jsURLUnquotedRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)\s+(href|src)\s*=\s*javascript:[^\s>]*"#,
+            options: []
+        )
+    }()
+    private static let styleAttrRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)\s+style\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)"#,
+            options: []
+        )
+    }()
 
     static func escape(_ value: String) -> String {
         value
@@ -38,12 +50,24 @@ enum HTMLSanitizer {
 
     static func sanitizeGeneratedHTML(_ html: String) -> String {
         var output = html
-        output = replace(regex: pairedTagsRegex, in: output, with: "")
-        output = replace(regex: singleTagsRegex, in: output, with: "")
-        output = replace(regex: eventHandlersRegex, in: output, with: "")
-        output = replace(regex: jsURLQuotedRegex, in: output, with: "")
-        output = replace(regex: jsURLUnquotedRegex, in: output, with: "")
-        output = replace(regex: styleAttrRegex, in: output, with: "")
+        if let regex = pairedTagsRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = singleTagsRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = eventHandlersRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = jsURLQuotedRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = jsURLUnquotedRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = styleAttrRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
         return output
     }
 
