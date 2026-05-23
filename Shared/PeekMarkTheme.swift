@@ -15,7 +15,7 @@ enum MarkdownAppearance: String, CaseIterable, Identifiable {
     var resolved: MarkdownAppearance {
         switch self {
         case .system:
-            let isDark = NSAppearance.current.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let isDark = NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return isDark ? .dark : .light
         case .light:
             return .light
