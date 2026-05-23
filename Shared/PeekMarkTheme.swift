@@ -1,11 +1,29 @@
 import Foundation
 
+#if canImport(AppKit)
+import AppKit
+#endif
+
 enum MarkdownAppearance: String, CaseIterable, Identifiable {
     case system
     case light
     case dark
 
     var id: String { rawValue }
+
+    #if canImport(AppKit)
+    var resolved: MarkdownAppearance {
+        switch self {
+        case .system:
+            let isDark = NSAppearance.current.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return isDark ? .dark : .light
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
+    #endif
 }
 
 enum PreviewFont: String, CaseIterable, Identifiable {

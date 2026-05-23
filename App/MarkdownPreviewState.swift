@@ -160,13 +160,7 @@ final class MarkdownPreviewState {
         renderGeneration += 1
         let generation = renderGeneration
 
-        let resolvedAppearance: MarkdownAppearance
-        if appearance == .system {
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            resolvedAppearance = isDark ? .dark : .light
-        } else {
-            resolvedAppearance = appearance
-        }
+        let resolvedAppearance = appearance.resolved
 
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
@@ -192,13 +186,7 @@ final class MarkdownPreviewState {
     ) {
         renderGeneration += 1
         
-        let resolvedAppearance: MarkdownAppearance
-        if appearance == .system {
-            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            resolvedAppearance = isDark ? .dark : .light
-        } else {
-            resolvedAppearance = appearance
-        }
+        let resolvedAppearance = appearance.resolved
 
         if let currentURL {
             load(url: currentURL, appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing)

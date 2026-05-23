@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		09D1AA9F43B9B2E1DBBE5E58 /* StatsHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15C85E5566B8E793952190E9 /* StatsHUDView.swift */; };
 		0BD7AD7A717E6E517FC24A39 /* MarkdownRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DEAE91B50EE65137798E8B /* MarkdownRendererTests.swift */; };
 		1ED9800E986A933ACC116C57 /* MarkdownPreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CAB7595951BD63735479329 /* MarkdownPreviewState.swift */; };
+		2B02B976CD3CA29DF06788B8 /* BreadcrumbView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6374E720AE2F134A4A8ED0 /* BreadcrumbView.swift */; };
 		2B7CA4FAE233C39BCA90310A /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6990815F8228672122147D12 /* MarkdownRenderer.swift */; };
 		306CC289225DF9E816300781 /* HTMLSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A23378D8FADEBD566204253 /* HTMLSanitizer.swift */; };
 		324F1452CFAF2BA60B7F65E2 /* HeadingExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5951367274B1C0955F3E5D5C /* HeadingExtractor.swift */; };
@@ -20,11 +22,14 @@
 		5756028A05BA427B102263C0 /* MarkdownDocumentLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF19F9C39F05E9159E05CA6 /* MarkdownDocumentLoader.swift */; };
 		5B8691D6DCA6B4DE596A46FB /* HeadingExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5951367274B1C0955F3E5D5C /* HeadingExtractor.swift */; };
 		5C408DF22E5CA2E8B4E5D057 /* PeekMarkTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D719E0C67B9E29EF6931D4 /* PeekMarkTheme.swift */; };
+		614BD417B0039403A8AEC5DB /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FC0903A3F0174752CBDC871 /* SidebarView.swift */; };
 		6DF83CCEEF4551C3EC982209 /* PeekMarkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F08B9B4288EBB8061A8182 /* PeekMarkApp.swift */; };
 		77C80901FE2A6F646711D7BF /* PeekMarkTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D719E0C67B9E29EF6931D4 /* PeekMarkTheme.swift */; };
 		8C155AB66C32212D253F65D6 /* quicklook_metadata_check.sh in Resources */ = {isa = PBXBuildFile; fileRef = 47439D16C27C9E5B4E0219A2 /* quicklook_metadata_check.sh */; };
 		8D68A7783E8B50E2B98B471B /* PeekMarkTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D719E0C67B9E29EF6931D4 /* PeekMarkTheme.swift */; };
+		8EFD590658B3E16C5E7F04E3 /* BottomFooterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB506F7DB3E4911E37ABD4F4 /* BottomFooterView.swift */; };
 		9BEED3FD1FDC76114B845E9D /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = D58B64DC535F2106FD581673 /* Markdown */; };
+		9E97062F0625D19D90D358D6 /* TypographyPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E2B2C482CFAB254C6C7D81 /* TypographyPopoverView.swift */; };
 		A94628D9DD63E3C3B5CC1F6F /* HTMLSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A23378D8FADEBD566204253 /* HTMLSanitizer.swift */; };
 		AC124EE356B95651C2C86736 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = AE64CA6393FB55A1ABBE67AF /* Markdown */; };
 		B9C57D214408200C632B147D /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD0658BF2631D9723C07D70 /* Markdown */; };
@@ -63,9 +68,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		04E2B2C482CFAB254C6C7D81 /* TypographyPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypographyPopoverView.swift; sourceTree = "<group>"; };
 		05D719E0C67B9E29EF6931D4 /* PeekMarkTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeekMarkTheme.swift; sourceTree = "<group>"; };
+		15C85E5566B8E793952190E9 /* StatsHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsHUDView.swift; sourceTree = "<group>"; };
 		180FA0C604BACC993F44AE4E /* PreviewProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewProvider.swift; sourceTree = "<group>"; };
 		2B914935358C770585AC12DB /* PeekMark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PeekMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C6374E720AE2F134A4A8ED0 /* BreadcrumbView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreadcrumbView.swift; sourceTree = "<group>"; };
 		47439D16C27C9E5B4E0219A2 /* quicklook_metadata_check.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = quicklook_metadata_check.sh; sourceTree = "<group>"; };
 		5951367274B1C0955F3E5D5C /* HeadingExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadingExtractor.swift; sourceTree = "<group>"; };
 		665D8F1951CCD2C65E46150E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -73,6 +81,7 @@
 		790BDC2A464E84699B9C83BD /* PeekMark.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PeekMark.entitlements; sourceTree = "<group>"; };
 		7A23378D8FADEBD566204253 /* HTMLSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLSanitizer.swift; sourceTree = "<group>"; };
 		7CA9983AA39E0369BF926B7B /* PeekMarkQuickLookExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PeekMarkQuickLookExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7FC0903A3F0174752CBDC871 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		83B2D72B12EFAEE84BCE031A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		88C0C85D2624E4D2569CD633 /* PeekMarkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PeekMarkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9CAB7595951BD63735479329 /* MarkdownPreviewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreviewState.swift; sourceTree = "<group>"; };
@@ -85,6 +94,7 @@
 		E80D1F4853903A34EF5EE417 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EBEBABC4F7D7E8AD0B1C8EBB /* packaging_scripts_check.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = packaging_scripts_check.sh; sourceTree = "<group>"; };
 		F2D45EED4C828B05A4BCC6D4 /* openwith_ui_check.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = openwith_ui_check.sh; sourceTree = "<group>"; };
+		FB506F7DB3E4911E37ABD4F4 /* BottomFooterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomFooterView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -169,12 +179,17 @@
 		C62E01D358F3C95023B1BDF4 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				FB506F7DB3E4911E37ABD4F4 /* BottomFooterView.swift */,
+				2C6374E720AE2F134A4A8ED0 /* BreadcrumbView.swift */,
 				665D8F1951CCD2C65E46150E /* ContentView.swift */,
 				83B2D72B12EFAEE84BCE031A /* Info.plist */,
 				9CAB7595951BD63735479329 /* MarkdownPreviewState.swift */,
 				AA30D156887A600F0EF17AF9 /* MarkdownPreviewView.swift */,
 				790BDC2A464E84699B9C83BD /* PeekMark.entitlements */,
 				A2F08B9B4288EBB8061A8182 /* PeekMarkApp.swift */,
+				7FC0903A3F0174752CBDC871 /* SidebarView.swift */,
+				15C85E5566B8E793952190E9 /* StatsHUDView.swift */,
+				04E2B2C482CFAB254C6C7D81 /* TypographyPopoverView.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -262,7 +277,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2650;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					183D479E6DE0A841E5AFCFFB = {
 						ProvisioningStyle = Automatic;
@@ -335,6 +350,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8EFD590658B3E16C5E7F04E3 /* BottomFooterView.swift in Sources */,
+				2B02B976CD3CA29DF06788B8 /* BreadcrumbView.swift in Sources */,
 				E09C394E9A62D9D08A51A36C /* ContentView.swift in Sources */,
 				A94628D9DD63E3C3B5CC1F6F /* HTMLSanitizer.swift in Sources */,
 				324F1452CFAF2BA60B7F65E2 /* HeadingExtractor.swift in Sources */,
@@ -344,6 +361,9 @@
 				D989B6E0824BF154A27E41EA /* MarkdownRenderer.swift in Sources */,
 				6DF83CCEEF4551C3EC982209 /* PeekMarkApp.swift in Sources */,
 				77C80901FE2A6F646711D7BF /* PeekMarkTheme.swift in Sources */,
+				614BD417B0039403A8AEC5DB /* SidebarView.swift in Sources */,
+				09D1AA9F43B9B2E1DBBE5E58 /* StatsHUDView.swift in Sources */,
+				9E97062F0625D19D90D358D6 /* TypographyPopoverView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -376,7 +396,6 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -422,11 +441,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -440,7 +457,6 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -454,7 +470,6 @@
 				CODE_SIGN_ENTITLEMENTS = App/PeekMark.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -500,11 +515,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -525,7 +538,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -539,7 +551,6 @@
 				CODE_SIGN_ENTITLEMENTS = Extension/PeekMarkQuickLookExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Extension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -559,7 +570,6 @@
 				CODE_SIGN_ENTITLEMENTS = Extension/PeekMarkQuickLookExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Extension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -579,7 +589,6 @@
 				CODE_SIGN_ENTITLEMENTS = App/PeekMark.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -596,7 +605,6 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

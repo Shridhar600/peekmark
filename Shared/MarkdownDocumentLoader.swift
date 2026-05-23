@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "app.peekmark", category: "BookmarkManager")
 
 enum MarkdownDocumentLoader {
     static let defaultByteLimit = 8 * 1024 * 1024
@@ -30,19 +33,6 @@ enum MarkdownDocumentLoader {
             throw PeekMarkError.unsupportedEncoding
         }
         return text
-    }
-
-    static func load(url: URL, byteLimit: Int = defaultByteLimit) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            Task {
-                do {
-                    let result = try load(url: url, byteLimit: byteLimit)
-                    continuation.resume(returning: result)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
     }
 }
 
@@ -98,7 +88,7 @@ enum BookmarkManager {
             bookmarks[resolvedPath] = bookmarkData
             UserDefaults.standard.set(bookmarks, forKey: key)
         } catch {
-            print("Failed to save bookmark for \(resolvedPath): \(error)")
+            logger.error("Failed to save bookmark for \(resolvedPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -123,7 +113,7 @@ enum BookmarkManager {
             }
             return resolvedURL
         } catch {
-            print("Failed to resolve bookmark for \(resolvedPath): \(error)")
+            logger.error("Failed to resolve bookmark for \(resolvedPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
