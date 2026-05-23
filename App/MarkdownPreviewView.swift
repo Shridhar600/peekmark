@@ -1,6 +1,25 @@
 import SwiftUI
 import WebKit
 
+@MainActor
+fileprivate final class Debouncer {
+    private var task: Task<Void, Never>?
+    private let duration: Duration
+
+    init(duration: Duration = .milliseconds(100)) {
+        self.duration = duration
+    }
+
+    func debounce(_ action: @escaping @MainActor () async -> Void) {
+        task?.cancel()
+        task = Task {
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled else { return }
+            await action()
+        }
+    }
+}
+
 struct MarkdownPreviewView: NSViewRepresentable {
     let bodyHTML: String
     let html: String
@@ -85,14 +104,9 @@ struct MarkdownPreviewView: NSViewRepresentable {
             webView.loadHTMLString(html, baseURL: nil)
 
             if !searchText.isEmpty {
-                let textToHighlight = self.searchText
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(0.3))
-                    context.coordinator.highlightSearch(in: webView, text: textToHighlight)
-                }
+                context.coordinator.debouncedHighlightSearch(in: webView, text: self.searchText)
             }
         } else {
-            var script = ""
             var fontVarsChanged = false
             var appearanceVarsChanged = false
             
@@ -104,7 +118,6 @@ struct MarkdownPreviewView: NSViewRepresentable {
             }
             
             if appearanceChanged {
-                context.coordinator.lastResolvedAppearance = resolvedAppearance
                 appearanceVarsChanged = true
             }
             
@@ -113,71 +126,72 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 let headingTopMargin = String(format: "%.2fem", fontSize * 0.07)
                 let headingBottomMargin = String(format: "%.2fem", fontSize * 0.02)
                 let cssFamily = font.cssFamily.replacingOccurrences(of: "\"", with: "\\\"")
-                
+
                 let isDark = resolvedAppearance == .dark
-                let bg = "transparent"
-                let text = isDark ? "#d2d2d7" : "#1d1d1f"
-                let secondaryText = "#86868b"
-                let line = isDark ? "#323236" : "#e5e5e7"
-                let softLine = isDark ? "#2c2c30" : "#f5f5f7"
-                let codeBg = isDark ? "#2c2c30" : "#f5f5f7"
-                let quoteBg = isDark ? "#2c2c30" : "#f5f5f7"
-                let tableStripe = isDark ? "#1c1c1e" : "#f9f9fb"
-                
-                script = """
-                (function() {
-                    var root = document.documentElement;
-                """
-                
+
                 if fontVarsChanged {
-                    script += """
-                    root.style.setProperty('--font-size', '\(fontSize)px');
-                    root.style.setProperty('--font-family', '\(cssFamily)');
-                    root.style.setProperty('--line-height', '\(spacing.lineSpacing)');
-                    root.style.setProperty('--paragraph-margin', '\(paragraphMargin)');
-                    root.style.setProperty('--heading-margin', '\(headingTopMargin) 0 \(headingBottomMargin)');
-                    """
+                    let capturedFontSize = fontSize
+                    let capturedCssFamily = cssFamily
+                    let capturedLineSpacing = spacing.lineSpacing
+                    webView.evaluateJavaScript("""
+                        (function() {
+                            var root = document.documentElement;
+                            root.style.setProperty('--font-size', '\(capturedFontSize)px');
+                            root.style.setProperty('--font-family', '\(capturedCssFamily)');
+                            root.style.setProperty('--line-height', '\(capturedLineSpacing)');
+                            root.style.setProperty('--paragraph-margin', '\(paragraphMargin)');
+                            root.style.setProperty('--heading-margin', '\(headingTopMargin) 0 \(headingBottomMargin)');
+                        })();
+                        """, completionHandler: nil)
                 }
-                
+
                 if appearanceVarsChanged {
-                    script += """
-                    root.setAttribute('data-appearance', '\(resolvedAppearance.rawValue)');
-                    root.style.setProperty('--bg', '\(bg)');
-                    root.style.setProperty('--text', '\(text)');
-                    root.style.setProperty('--secondary-text', '\(secondaryText)');
-                    root.style.setProperty('--line', '\(line)');
-                    root.style.setProperty('--soft-line', '\(softLine)');
-                    root.style.setProperty('--code-bg', '\(codeBg)');
-                    root.style.setProperty('--quote-bg', '\(quoteBg)');
-                    root.style.setProperty('--table-stripe', '\(tableStripe)');
-                    
-                    var lightStyle = document.getElementById('hljs-light');
-                    var darkStyle = document.getElementById('hljs-dark');
-                    if (lightStyle) { lightStyle.disabled = \(isDark ? "true" : "false"); }
-                    if (darkStyle) { darkStyle.disabled = \(!isDark ? "true" : "false"); }
-                    
-                    if (window.mermaid) {
-                        window.mermaid.initialize({
-                            theme: '\(isDark ? "dark" : "default")',
-                            securityLevel: 'strict'
-                        });
-                        document.querySelectorAll('.mermaid').forEach(function(el) {
-                            var src = el.getAttribute('data-mermaid-src');
-                            if (src) {
-                                el.innerHTML = '';
-                                el.textContent = src;
-                                el.removeAttribute('data-processed');
+                    let capturedIsDark = isDark
+                    let capturedAppearance = resolvedAppearance
+                    context.coordinator.appearanceDebouncer.debounce { [weak webView] in
+                        guard let webView else { return }
+                        guard context.coordinator.lastResolvedAppearance != capturedAppearance else { return }
+                        context.coordinator.lastResolvedAppearance = capturedAppearance
+                        let script = """
+                        (function() {
+                            var root = document.documentElement;
+                            root.setAttribute('data-appearance', '\(capturedAppearance.rawValue)');
+                            var isDark = \(capturedIsDark);
+                            root.style.setProperty('--bg', 'transparent');
+                            root.style.setProperty('--text', isDark ? '#d2d2d7' : '#1d1d1f');
+                            root.style.setProperty('--secondary-text', '#86868b');
+                            root.style.setProperty('--line', isDark ? '#323236' : '#e5e5e7');
+                            root.style.setProperty('--soft-line', isDark ? '#2c2c30' : '#f5f5f7');
+                            root.style.setProperty('--code-bg', isDark ? '#2c2c30' : '#f5f5f7');
+                            root.style.setProperty('--quote-bg', isDark ? '#2c2c30' : '#f5f5f7');
+                            root.style.setProperty('--table-stripe', isDark ? '#1c1c1e' : '#f9f9fb');
+                            root.style.setProperty('--link', isDark ? '#5eb5ff' : '#0055cc');
+                            
+                            var lightStyle = document.getElementById('hljs-light');
+                            var darkStyle = document.getElementById('hljs-dark');
+                            if (lightStyle) { lightStyle.disabled = isDark; }
+                            if (darkStyle) { darkStyle.disabled = !isDark; }
+                            
+                            if (window.mermaid) {
+                                window.mermaid.initialize({
+                                    theme: isDark ? "dark" : "default",
+                                    securityLevel: 'strict'
+                                });
+                                document.querySelectorAll('.mermaid').forEach(function(el) {
+                                    var src = el.getAttribute('data-mermaid-src');
+                                    if (src) {
+                                        el.innerHTML = '';
+                                        el.textContent = src;
+                                        el.removeAttribute('data-processed');
+                                    }
+                                });
+                                window.mermaid.run();
                             }
-                        });
-                        window.mermaid.run();
+                        })();
+                        """
+                        webView.evaluateJavaScript(script, completionHandler: nil)
                     }
-                    """
                 }
-                
-                script += """
-                })();
-                """
-                webView.evaluateJavaScript(script, completionHandler: nil)
             }
         }
     }
@@ -194,8 +208,15 @@ struct MarkdownPreviewView: NSViewRepresentable {
         var allowNextMainFrameLoad = false
         var pendingScrollOrigin: NSPoint?
 
+        fileprivate var appearanceDebouncer = Debouncer(duration: .milliseconds(100))
+        fileprivate var searchDebouncer = Debouncer(duration: .milliseconds(150))
+
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "copyCode", let codeString = message.body as? String {
+                guard codeString.count <= 100_000,
+                      codeString.count >= 1 else {
+                    return
+                }
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
                 pasteboard.setString(codeString, forType: .string)
@@ -240,7 +261,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }
 
-        func highlightSearch(in webView: WKWebView, text: String) {
+func debouncedHighlightSearch(in webView: WKWebView, text: String) {
             let escaped = text
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "'", with: "\\'")
@@ -287,15 +308,16 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 nodes.forEach(function(textNode) {
                     var text = textNode.nodeValue;
                     var lower = text.toLowerCase();
-                    var queryLower = query.toLowerCase();
+                    var idx = lower.indexOf(query.toLowerCase());
                     var frag = document.createDocumentFragment();
                     var last = 0;
-                    var idx = lower.indexOf(queryLower);
                     while (idx !== -1) {
-                        frag.appendChild(document.createTextNode(text.substring(last, idx)));
+                        if (idx > last) {
+                            frag.appendChild(document.createTextNode(text.substring(last, idx)));
+                        }
                         var mark = document.createElement('mark');
                         mark.className = 'search-highlight';
-                        mark.textContent = text.substring(idx, idx + query.length);
+                        mark.appendChild(document.createTextNode(text.substring(idx, idx + query.length)));
                         frag.appendChild(mark);
                         last = idx + query.length;
                         idx = lower.indexOf(queryLower, last);
@@ -310,7 +332,9 @@ struct MarkdownPreviewView: NSViewRepresentable {
             })();
             """
 
-            webView.evaluateJavaScript(script, completionHandler: nil)
+            searchDebouncer.debounce { [weak webView] in
+                webView?.evaluateJavaScript(script, completionHandler: nil)
+            }
         }
     }
 }

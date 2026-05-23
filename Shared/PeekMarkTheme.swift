@@ -98,6 +98,15 @@ enum PreviewSpacing: String, CaseIterable, Identifiable {
 }
 
 enum PeekMarkTheme {
+    private static nonisolated(unsafe) var cssCache: [CacheKey: String] = [:]
+
+    private struct CacheKey: Hashable {
+        let appearance: MarkdownAppearance
+        let font: PreviewFont
+        let fontSize: Double
+        let spacing: PreviewSpacing
+    }
+
     static func css(
         for appearance: MarkdownAppearance = .system,
         font: PreviewFont = .system,
@@ -105,9 +114,14 @@ enum PeekMarkTheme {
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
     ) -> String {
+        let cacheKey = CacheKey(appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
+        if let cached = cssCache[cacheKey] {
+            return cached
+        }
+        let generatedCSS: String
         switch appearance {
         case .system:
-            return css(
+            generatedCSS = css(
                 colorScheme: "light dark",
                 background: isTransparent ? "transparent" : "#ffffff",
                 text: "#1d1d1f",
@@ -123,7 +137,7 @@ enum PeekMarkTheme {
                 adaptiveDarkCSS: adaptiveDarkCSS(isTransparent: isTransparent)
             )
         case .light:
-            return css(
+            generatedCSS = css(
                 colorScheme: "light",
                 background: isTransparent ? "transparent" : "#ffffff",
                 text: "#1d1d1f",
@@ -139,7 +153,7 @@ enum PeekMarkTheme {
                 adaptiveDarkCSS: ""
             )
         case .dark:
-            return css(
+            generatedCSS = css(
                 colorScheme: "dark",
                 background: isTransparent ? "transparent" : "#1e1e1e",
                 text: "#d2d2d7",
@@ -155,6 +169,8 @@ enum PeekMarkTheme {
                 adaptiveDarkCSS: ""
             )
         }
+        cssCache[cacheKey] = generatedCSS
+        return generatedCSS
     }
 
     private static func adaptiveDarkCSS(isTransparent: Bool) -> String {
@@ -170,6 +186,7 @@ enum PeekMarkTheme {
         --code-bg: #2c2c30;
         --quote-bg: #2c2c30;
         --table-stripe: #1c1c1e;
+        --link: #5eb5ff;
       }
     }
     """
@@ -213,6 +230,7 @@ enum PeekMarkTheme {
       --padding-vertical: max(16px, calc(var(--font-size) * 1.4));
       --padding-horizontal: max(24px, calc(var(--font-size) * 1.8));
       --max-width: calc(var(--font-size) * 48);
+      --link: \(colorScheme.contains("light") ? "#0055cc" : "#5eb5ff");
     }
 
     * { box-sizing: border-box; }
@@ -255,7 +273,7 @@ enum PeekMarkTheme {
     h3 { font-size: 1.25rem; }
 
     p, ul, ol, blockquote, table, pre { margin: 0 0 var(--paragraph-margin); }
-    a { color: LinkText; text-decoration-thickness: 0.08em; text-underline-offset: 0.18em; }
+    a { color: var(--link); text-decoration-thickness: 0.08em; text-underline-offset: 0.18em; }
     img { max-width: 100%; height: auto; }
 
     blockquote {

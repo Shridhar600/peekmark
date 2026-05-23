@@ -1,5 +1,6 @@
 import Foundation
 import Markdown
+import UniformTypeIdentifiers
 
 struct MarkdownRenderResult {
     let title: String
@@ -22,9 +23,11 @@ enum MarkdownRenderer {
         fontSize: Double = 14.5,
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
-    ) -> MarkdownRenderResult {
+    ) async -> MarkdownRenderResult {
         let (metadata, content) = parseFrontMatter(markdown)
-        let (bodyHTML, headings) = renderBody(markdown: content, baseURL: baseURL)
+
+        let (bodyHTML, headings) = await renderBodyAsync(markdown: content, baseURL: baseURL)
+
         return wrapHTML(title: title, bodyHTML: bodyHTML, metadata: metadata, headings: headings, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent)
     }
 
@@ -84,6 +87,22 @@ enum MarkdownRenderer {
         let document = Document(parsing: processedMarkdown)
         let body = HTMLSanitizer.sanitizeGeneratedHTML(HTMLFormatter.format(document))
         let bodyWithImages = embedLocalImages(in: body, baseURL: baseURL)
+        let headings = HeadingExtractor.extract(from: document)
+        return (bodyWithImages + footnotesHTML, headings)
+    }
+
+    static func renderBodyAsync(markdown: String, baseURL: URL? = nil) async -> (bodyHTML: String, headings: [HeadingItem]) {
+        let (processedMarkdown, footnotesHTML) = processFootnotes(markdown)
+        let document = Document(parsing: processedMarkdown)
+        let body = HTMLSanitizer.sanitizeGeneratedHTML(HTMLFormatter.format(document))
+
+        let bodyWithImages: String
+        if let baseURL = baseURL {
+            bodyWithImages = await ImageEmbeddingActor.shared.rewrite(html: body, baseDirectory: baseURL)
+        } else {
+            bodyWithImages = body
+        }
+
         let headings = HeadingExtractor.extract(from: document)
         return (bodyWithImages + footnotesHTML, headings)
     }
@@ -198,8 +217,8 @@ enum MarkdownRenderer {
     ) -> String {
         let isDark = appearance == .dark
         let highlightCSSLink = """
-        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"\(isDark ? " disabled" : "")>
-        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"\(!isDark ? " disabled" : "")>
+        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" integrity="sha256-Oppd74ucMR5a5Dq96FxjEzGF7tTw2fZ/6ksAqDCM8GY=" crossorigin="anonymous" \(isDark ? "disabled" : "")>
+        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" integrity="sha256-nyCNAiECsdDHrr/s2OQsp5l9XeY2ZJ0rMepjCT2AkBk=" crossorigin="anonymous" \(!isDark ? "disabled" : "")>
         """
 
         return """
@@ -207,7 +226,7 @@ enum MarkdownRenderer {
         <html data-appearance="\(appearance.rawValue)">
         <head>
           <meta charset="utf-8">
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; img-src 'self' data:;">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self';">
           <script>
             // Mock matchMedia to match resolved appearance
             (function() {
@@ -264,12 +283,12 @@ enum MarkdownRenderer {
           
           <!-- Highlight.js for Syntax Highlighting -->
           \(highlightCSSLink)
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js" integrity="sha256-xKOZ3W9Ii8l6NUbjR2dHs+cUyZxXuUcxVMb7jSWbk4E=" crossorigin="anonymous"></script>
           
           <!-- KaTeX for LaTeX Render -->
-          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" integrity="sha256-94eJG1UNVUwhSqiQLzmsRt8tvUj97FAKIECl3OHoq1g=" crossorigin="anonymous">
+          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js" integrity="sha256-hjgR4rqghJx3vJLSbUT00KSEPCqKtSxGIBfepXMW5Ng=" crossorigin="anonymous"></script>
+          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js" integrity="sha256-u1PrlTOUUxquNv3VNwZcQkTrhUKQGjzpFGAdkyZ1uKw=" crossorigin="anonymous"></script>
 
           <style>
         \(PeekMarkTheme.css(for: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent))
@@ -402,21 +421,23 @@ enum MarkdownRenderer {
 
                 pre.appendChild(actionsDiv);
             });
-          </script>          <!-- Load Mermaid ESM -->
-          <script type="module">
-            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-            window.mermaid = mermaid;
-
-            var appearance = document.documentElement.getAttribute('data-appearance') || 'light';
-            var isDark = appearance === 'dark';
-            if (appearance === 'system') {
-              isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            }
-            mermaid.initialize({
-              startOnLoad: true,
-              theme: isDark ? 'dark' : 'default',
-              securityLevel: 'strict'
-            });
+          </script>
+          <!-- Load Mermaid (IIFE version for better CSP compatibility) -->
+          <script src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js" integrity="sha256-cBN+d7snO7LvlyuG6LBADMqL5TyyW/xFkRoYbcmGZd4=" crossorigin="anonymous"></script>
+          <script>
+            (function() {
+              var appearance = document.documentElement.getAttribute('data-appearance') || 'light';
+              var isDark = appearance === 'dark';
+              if (appearance === 'system') {
+                isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+              }
+              mermaid.initialize({
+                startOnLoad: false,
+                theme: isDark ? 'dark' : 'default',
+                securityLevel: 'loose'
+              });
+              mermaid.run();
+            })();
           </script>
         </body>
         </html>
@@ -428,6 +449,15 @@ enum MarkdownRenderer {
             return html
         }
         return LocalImageDataURIRewriter.rewrite(html: html, baseDirectory: baseURL)
+    }
+
+    private actor ImageEmbeddingActor {
+        static let shared = ImageEmbeddingActor()
+        private init() {}
+
+        func rewrite(html: String, baseDirectory: URL) -> String {
+            return LocalImageDataURIRewriter.rewrite(html: html, baseDirectory: baseDirectory)
+        }
     }
 }
 
@@ -443,6 +473,13 @@ private enum LocalImageDataURIRewriter {
         "jpeg": "image/jpeg",
         "gif": "image/gif",
         "webp": "image/webp"
+    ]
+
+    private static let supportedImageUTTypes: Set<UTType> = [
+        .png,
+        .jpeg,
+        .gif,
+        .webP
     ]
 
     static func rewrite(
@@ -491,6 +528,11 @@ private enum LocalImageDataURIRewriter {
             return nil
         }
         guard isRegularFileWithinLimit(url: url, byteLimit: byteLimit) else {
+            return nil
+        }
+        guard let resourceValues = try? url.resourceValues(forKeys: [.contentTypeKey]),
+              let utType = resourceValues.contentType,
+              supportedImageUTTypes.contains(utType) else {
             return nil
         }
         guard let data = try? Data(contentsOf: url), data.count <= byteLimit else {

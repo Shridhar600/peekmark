@@ -4,11 +4,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DERIVED_DATA_DIR="$ROOT_DIR/.build/DerivedData"
-APP_PATH="$DERIVED_DATA_DIR/Build/Products/Debug/PeekMark.app"
+CONFIGURATION="${CONFIGURATION:-Debug}"
+CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
+APP_PATH="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/PeekMark.app"
 DIST_DIR="$ROOT_DIR/dist"
-ZIP_PATH="$DIST_DIR/PeekMark-debug.zip"
+ZIP_PATH="$DIST_DIR/PeekMark-$CONFIGURATION.zip"
 
-export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+
 
 verify_clean_entitlements() {
   local target="$1"
@@ -38,8 +40,9 @@ xcodegen --project "$ROOT_DIR"
 xcodebuild \
   -project "$ROOT_DIR/PeekMark.xcodeproj" \
   -scheme "PeekMark" \
-  -configuration Debug \
+  -configuration "$CONFIGURATION" \
   -derivedDataPath "$DERIVED_DATA_DIR" \
+  CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
   clean build
 
 verify_clean_entitlements "$APP_PATH" true true
