@@ -118,6 +118,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
             }
             
             if appearanceChanged {
+                context.coordinator.lastResolvedAppearance = resolvedAppearance
                 appearanceVarsChanged = true
             }
             
@@ -148,49 +149,44 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 if appearanceVarsChanged {
                     let capturedIsDark = isDark
                     let capturedAppearance = resolvedAppearance
-                    context.coordinator.appearanceDebouncer.debounce { [weak webView] in
-                        guard let webView else { return }
-                        guard context.coordinator.lastResolvedAppearance != capturedAppearance else { return }
-                        context.coordinator.lastResolvedAppearance = capturedAppearance
-                        let script = """
-                        (function() {
-                            var root = document.documentElement;
-                            root.setAttribute('data-appearance', '\(capturedAppearance.rawValue)');
-                            var isDark = \(capturedIsDark);
-                            root.style.setProperty('--bg', 'transparent');
-                            root.style.setProperty('--text', isDark ? '#d2d2d7' : '#1d1d1f');
-                            root.style.setProperty('--secondary-text', '#86868b');
-                            root.style.setProperty('--line', isDark ? '#323236' : '#e5e5e7');
-                            root.style.setProperty('--soft-line', isDark ? '#2c2c30' : '#f5f5f7');
-                            root.style.setProperty('--code-bg', isDark ? '#2c2c30' : '#f5f5f7');
-                            root.style.setProperty('--quote-bg', isDark ? '#2c2c30' : '#f5f5f7');
-                            root.style.setProperty('--table-stripe', isDark ? '#1c1c1e' : '#f9f9fb');
-                            root.style.setProperty('--link', isDark ? '#5eb5ff' : '#0055cc');
-                            
-                            var lightStyle = document.getElementById('hljs-light');
-                            var darkStyle = document.getElementById('hljs-dark');
-                            if (lightStyle) { lightStyle.disabled = isDark; }
-                            if (darkStyle) { darkStyle.disabled = !isDark; }
-                            
-                            if (window.mermaid) {
-                                window.mermaid.initialize({
-                                    theme: isDark ? "dark" : "default",
-                                    securityLevel: 'strict'
-                                });
-                                document.querySelectorAll('.mermaid').forEach(function(el) {
-                                    var src = el.getAttribute('data-mermaid-src');
-                                    if (src) {
-                                        el.innerHTML = '';
-                                        el.textContent = src;
-                                        el.removeAttribute('data-processed');
-                                    }
-                                });
-                                window.mermaid.run();
-                            }
-                        })();
-                        """
-                        webView.evaluateJavaScript(script, completionHandler: nil)
-                    }
+                    let script = """
+                    (function() {
+                        var root = document.documentElement;
+                        root.setAttribute('data-appearance', '\(capturedAppearance.rawValue)');
+                        var isDark = \(capturedIsDark);
+                        root.style.setProperty('--bg', 'transparent');
+                        root.style.setProperty('--text', isDark ? '#d2d2d7' : '#1d1d1f');
+                        root.style.setProperty('--secondary-text', '#86868b');
+                        root.style.setProperty('--line', isDark ? '#323236' : '#e5e5e7');
+                        root.style.setProperty('--soft-line', isDark ? '#2c2c30' : '#f5f5f7');
+                        root.style.setProperty('--code-bg', isDark ? '#2c2c30' : '#f5f5f7');
+                        root.style.setProperty('--quote-bg', isDark ? '#2c2c30' : '#f5f5f7');
+                        root.style.setProperty('--table-stripe', isDark ? '#1c1c1e' : '#f9f9fb');
+                        root.style.setProperty('--link', isDark ? '#5eb5ff' : '#0055cc');
+                        
+                        var lightStyle = document.getElementById('hljs-light');
+                        var darkStyle = document.getElementById('hljs-dark');
+                        if (lightStyle) { lightStyle.disabled = isDark; }
+                        if (darkStyle) { darkStyle.disabled = !isDark; }
+                        
+                        if (window.mermaid) {
+                            window.mermaid.initialize({
+                                theme: isDark ? "dark" : "default",
+                                securityLevel: 'strict'
+                            });
+                            document.querySelectorAll('.mermaid').forEach(function(el) {
+                                var src = el.getAttribute('data-mermaid-src');
+                                if (src) {
+                                    el.innerHTML = '';
+                                    el.textContent = src;
+                                    el.removeAttribute('data-processed');
+                                }
+                            });
+                            window.mermaid.run();
+                        }
+                    })();
+                    """
+                    webView.evaluateJavaScript(script, completionHandler: nil)
                 }
             }
         }
@@ -208,7 +204,6 @@ struct MarkdownPreviewView: NSViewRepresentable {
         var allowNextMainFrameLoad = false
         var pendingScrollOrigin: NSPoint?
 
-        fileprivate var appearanceDebouncer = Debouncer(duration: .milliseconds(100))
         fileprivate var searchDebouncer = Debouncer(duration: .milliseconds(150))
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -250,6 +245,65 @@ struct MarkdownPreviewView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            // Re-apply latest styling variables to ensure they are not lost if updated during page load
+            let fontSize = lastFontSize ?? 14.5
+            let font = lastFont ?? .system
+            let spacing = lastSpacing ?? .regular
+            let resolvedAppearance = lastResolvedAppearance ?? .light
+            
+            let paragraphMargin = String(format: "%.2frem", fontSize * 0.042)
+            let headingTopMargin = String(format: "%.2fem", fontSize * 0.07)
+            let headingBottomMargin = String(format: "%.2fem", fontSize * 0.02)
+            let cssFamily = font.cssFamily.replacingOccurrences(of: "\"", with: "\\\"")
+            let isDark = resolvedAppearance == .dark
+
+            let script = """
+            (function() {
+                var root = document.documentElement;
+                
+                // Fonts
+                root.style.setProperty('--font-size', '\(fontSize)px');
+                root.style.setProperty('--font-family', '\(cssFamily)');
+                root.style.setProperty('--line-height', '\(spacing.lineSpacing)');
+                root.style.setProperty('--paragraph-margin', '\(paragraphMargin)');
+                root.style.setProperty('--heading-margin', '\(headingTopMargin) 0 \(headingBottomMargin)');
+                
+                // Appearance
+                root.setAttribute('data-appearance', '\(resolvedAppearance.rawValue)');
+                root.style.setProperty('--bg', 'transparent');
+                root.style.setProperty('--text', isDark ? '#d2d2d7' : '#1d1d1f');
+                root.style.setProperty('--secondary-text', '#86868b');
+                root.style.setProperty('--line', isDark ? '#323236' : '#e5e5e7');
+                root.style.setProperty('--soft-line', isDark ? '#2c2c30' : '#f5f5f7');
+                root.style.setProperty('--code-bg', isDark ? '#2c2c30' : '#f5f5f7');
+                root.style.setProperty('--quote-bg', isDark ? '#2c2c30' : '#f5f5f7');
+                root.style.setProperty('--table-stripe', isDark ? '#1c1c1e' : '#f9f9fb');
+                root.style.setProperty('--link', isDark ? '#5eb5ff' : '#0055cc');
+                
+                var lightStyle = document.getElementById('hljs-light');
+                var darkStyle = document.getElementById('hljs-dark');
+                if (lightStyle) { lightStyle.disabled = isDark; }
+                if (darkStyle) { darkStyle.disabled = !isDark; }
+                
+                if (window.mermaid) {
+                    window.mermaid.initialize({
+                        theme: isDark ? "dark" : "default",
+                        securityLevel: 'strict'
+                    });
+                    document.querySelectorAll('.mermaid').forEach(function(el) {
+                        var src = el.getAttribute('data-mermaid-src');
+                        if (src) {
+                            el.innerHTML = '';
+                            el.textContent = src;
+                            el.removeAttribute('data-processed');
+                        }
+                    });
+                    window.mermaid.run();
+                }
+            })();
+            """
+            webView.evaluateJavaScript(script, completionHandler: nil)
+
             guard let pendingScrollOrigin else {
                 return
             }
