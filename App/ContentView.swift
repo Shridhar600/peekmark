@@ -205,25 +205,22 @@ struct ContentView: View {
 
     private func breadcrumbView(for url: URL) -> some View {
         let components = url.resolvingSymlinksInPath().pathComponents.filter { $0 != "/" && !$0.isEmpty }
-        
         let displayComponents = components.count > 3 ? ["…"] + components.suffix(3) : components
         
-        return Group {
-            switch displayComponents.count {
-            case 0:
-                Text("")
-            case 1:
-                Text(displayComponents[0])
+        return HStack(spacing: 4) {
+            ForEach(0..<displayComponents.count, id: \.self) { index in
+                let component = displayComponents[index]
+                let isLast = index == displayComponents.count - 1
+                
+                Text(component)
                     .font(.system(.caption, design: .rounded))
-                    .foregroundColor(.primary)
-            case 2:
-                Text("\(Text(displayComponents[0]).font(.system(.caption, design: .rounded)).foregroundColor(.secondary)) \(Text("›").font(.system(.caption, design: .rounded)).foregroundColor(.secondary.opacity(0.6))) \(Text(displayComponents[1]).font(.system(.caption, design: .rounded)).foregroundColor(.primary))")
-            case 3:
-                Text("\(Text(displayComponents[0]).font(.system(.caption, design: .rounded)).foregroundColor(.secondary)) \(Text("›").font(.system(.caption, design: .rounded)).foregroundColor(.secondary.opacity(0.6))) \(Text(displayComponents[1]).font(.system(.caption, design: .rounded)).foregroundColor(.secondary)) \(Text("›").font(.system(.caption, design: .rounded)).foregroundColor(.secondary.opacity(0.6))) \(Text(displayComponents[2]).font(.system(.caption, design: .rounded)).foregroundColor(.primary))")
-            case 4:
-                Text("\(Text(displayComponents[0]).font(.system(.caption, design: .rounded)).foregroundColor(.secondary)) \(Text("›").font(.system(.caption, design: .rounded)).foregroundColor(.secondary.opacity(0.6))) \(Text(displayComponents[1]).font(.system(.caption, design: .rounded)).foregroundColor(.secondary)) \(Text("›").font(.system(.caption, design: .rounded)).foregroundColor(.secondary.opacity(0.6))) \(Text(displayComponents[2]).font(.system(.caption, design: .rounded)).foregroundColor(.secondary)) \(Text("›").font(.system(.caption, design: .rounded)).foregroundColor(.secondary.opacity(0.6))) \(Text(displayComponents[3]).font(.system(.caption, design: .rounded)).foregroundColor(.primary))")
-            default:
-                Text("")
+                    .foregroundColor(isLast ? .primary : .secondary)
+                
+                if !isLast {
+                    Text("›")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
             }
         }
         .lineLimit(1)
@@ -332,19 +329,23 @@ struct ContentView: View {
         recentFilesRaw.split(separator: "|").compactMap { URL(string: String($0)) }
     }
 
-    private var lastModifiedString: String {
-        guard let date = state.renderedDocument.modificationDate else { return "--" }
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private var lastModifiedString: String {
+        guard let date = state.renderedDocument.modificationDate else { return "--" }
+        return Self.dateFormatter.string(from: date)
     }
 
     private func addToRecentFiles(_ url: URL) {
         let standardURL = url.resolvingSymlinksInPath()
         
         // 1. Update persistent storage (always move to top for next launch)
-        var persistent = persistentRecentFiles.map { $0.resolvingSymlinksInPath() }.filter { $0 != standardURL }
+        var persistent = persistentRecentFiles.filter { $0 != standardURL }
         persistent.insert(standardURL, at: 0)
         if persistent.count > 5 {
             persistent = Array(persistent.prefix(5))

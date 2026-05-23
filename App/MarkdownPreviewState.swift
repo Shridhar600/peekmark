@@ -10,12 +10,14 @@ struct RenderedDocument: Sendable {
     let modificationDate: Date?
     let fileURL: URL?
     let metadata: [String: String]
+    let wordCount: Int
+    let characterCount: Int
 
     var isEmpty: Bool {
-        html.isEmpty
+        rawMarkdown.isEmpty
     }
 
-    static let empty = RenderedDocument(title: "PeekMark", html: "", bodyHTML: "", rawMarkdown: "", headings: [], modificationDate: nil, fileURL: nil, metadata: [:])
+    static let empty = RenderedDocument(title: "PeekMark", html: "", bodyHTML: "", rawMarkdown: "", headings: [], modificationDate: nil, fileURL: nil, metadata: [:], wordCount: 0, characterCount: 0)
 
     static func load(
         from url: URL,
@@ -43,16 +45,21 @@ struct RenderedDocument: Sendable {
                 )
                 return (markdown, renderResult, modDate)
             }
-            let headings = HeadingExtractor.extract(from: markdown)
+            
+            let wordCount = RenderedDocument.calculateWordCount(for: markdown)
+            let characterCount = markdown.count
+            
             return RenderedDocument(
                 title: result.title,
                 html: result.html,
                 bodyHTML: result.bodyHTML,
                 rawMarkdown: markdown,
-                headings: headings,
+                headings: result.headings,
                 modificationDate: modificationDate,
                 fileURL: url,
-                metadata: result.metadata
+                metadata: result.metadata,
+                wordCount: wordCount,
+                characterCount: characterCount
             )
         } catch {
             let result = MarkdownRenderer.renderError(
@@ -72,9 +79,19 @@ struct RenderedDocument: Sendable {
                 headings: [],
                 modificationDate: nil,
                 fileURL: url,
-                metadata: [:]
+                metadata: [:],
+                wordCount: 0,
+                characterCount: 0
             )
         }
+    }
+
+    fileprivate static func calculateWordCount(for text: String) -> Int {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return 0 }
+        let charSet = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
+        let components = trimmed.components(separatedBy: charSet)
+        return components.filter { !$0.isEmpty }.count
     }
 
     func withStyle(
@@ -91,6 +108,7 @@ struct RenderedDocument: Sendable {
             title: title,
             bodyHTML: bodyHTML,
             metadata: metadata,
+            headings: headings,
             appearance: appearance,
             font: font,
             fontSize: fontSize,
@@ -105,7 +123,9 @@ struct RenderedDocument: Sendable {
             headings: headings,
             modificationDate: modificationDate,
             fileURL: fileURL,
-            metadata: metadata
+            metadata: metadata,
+            wordCount: wordCount,
+            characterCount: characterCount
         )
     }
 }
@@ -117,15 +137,11 @@ final class MarkdownPreviewState {
     var renderGeneration: Int = 0
 
     var wordCount: Int {
-        let text = renderedDocument.rawMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return 0 }
-        let charSet = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
-        let components = text.components(separatedBy: charSet)
-        return components.filter { !$0.isEmpty }.count
+        renderedDocument.wordCount
     }
 
     var characterCount: Int {
-        renderedDocument.rawMarkdown.count
+        renderedDocument.characterCount
     }
 
     var readingTimeMinutes: Int {

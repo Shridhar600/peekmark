@@ -78,9 +78,9 @@ struct MarkdownPreviewView: NSViewRepresentable {
         }
 
         let appearanceChanged = context.coordinator.lastResolvedAppearance != resolvedAppearance
-        let contentChanged = context.coordinator.lastBodyHTML != bodyHTML || context.coordinator.lastSearchText != searchText || appearanceChanged
+        let bodyChanged = context.coordinator.lastBodyHTML != bodyHTML || context.coordinator.lastSearchText != searchText
         
-        if contentChanged {
+        if bodyChanged {
             context.coordinator.lastBodyHTML = bodyHTML
             context.coordinator.lastHTML = html
             context.coordinator.lastSearchText = searchText
@@ -98,27 +98,94 @@ struct MarkdownPreviewView: NSViewRepresentable {
                     context.coordinator.highlightSearch(in: webView, text: self.searchText)
                 }
             }
-        } else if context.coordinator.lastFontSize != fontSize || context.coordinator.lastFont != font || context.coordinator.lastSpacing != spacing {
-            context.coordinator.lastFont = font
-            context.coordinator.lastFontSize = fontSize
-            context.coordinator.lastSpacing = spacing
+        } else {
+            var script = ""
+            var fontVarsChanged = false
+            var appearanceVarsChanged = false
             
-            let paragraphMargin = String(format: "%.2frem", fontSize * 0.042)
-            let headingTopMargin = String(format: "%.2fem", fontSize * 0.07)
-            let headingBottomMargin = String(format: "%.2fem", fontSize * 0.02)
-            let cssFamily = font.cssFamily.replacingOccurrences(of: "\"", with: "\\\"")
+            if context.coordinator.lastFontSize != fontSize || context.coordinator.lastFont != font || context.coordinator.lastSpacing != spacing {
+                context.coordinator.lastFont = font
+                context.coordinator.lastFontSize = fontSize
+                context.coordinator.lastSpacing = spacing
+                fontVarsChanged = true
+            }
             
-            let script = """
-            (function() {
-                var root = document.documentElement;
-                root.style.setProperty('--font-size', '\(fontSize)px');
-                root.style.setProperty('--font-family', '\(cssFamily)');
-                root.style.setProperty('--line-height', '\(spacing.lineSpacing)');
-                root.style.setProperty('--paragraph-margin', '\(paragraphMargin)');
-                root.style.setProperty('--heading-margin', '\(headingTopMargin) 0 \(headingBottomMargin)');
-            })();
-            """
-            webView.evaluateJavaScript(script, completionHandler: nil)
+            if appearanceChanged {
+                context.coordinator.lastResolvedAppearance = resolvedAppearance
+                appearanceVarsChanged = true
+            }
+            
+            if fontVarsChanged || appearanceVarsChanged {
+                let paragraphMargin = String(format: "%.2frem", fontSize * 0.042)
+                let headingTopMargin = String(format: "%.2fem", fontSize * 0.07)
+                let headingBottomMargin = String(format: "%.2fem", fontSize * 0.02)
+                let cssFamily = font.cssFamily.replacingOccurrences(of: "\"", with: "\\\"")
+                
+                let isDark = resolvedAppearance == .dark
+                let bg = "transparent"
+                let text = isDark ? "#d2d2d7" : "#1d1d1f"
+                let secondaryText = "#86868b"
+                let line = isDark ? "#323236" : "#e5e5e7"
+                let softLine = isDark ? "#2c2c30" : "#f5f5f7"
+                let codeBg = isDark ? "#2c2c30" : "#f5f5f7"
+                let quoteBg = isDark ? "#2c2c30" : "#f5f5f7"
+                let tableStripe = isDark ? "#1c1c1e" : "#f9f9fb"
+                
+                script = """
+                (function() {
+                    var root = document.documentElement;
+                """
+                
+                if fontVarsChanged {
+                    script += """
+                    root.style.setProperty('--font-size', '\(fontSize)px');
+                    root.style.setProperty('--font-family', '\(cssFamily)');
+                    root.style.setProperty('--line-height', '\(spacing.lineSpacing)');
+                    root.style.setProperty('--paragraph-margin', '\(paragraphMargin)');
+                    root.style.setProperty('--heading-margin', '\(headingTopMargin) 0 \(headingBottomMargin)');
+                    """
+                }
+                
+                if appearanceVarsChanged {
+                    script += """
+                    root.setAttribute('data-appearance', '\(resolvedAppearance.rawValue)');
+                    root.style.setProperty('--bg', '\(bg)');
+                    root.style.setProperty('--text', '\(text)');
+                    root.style.setProperty('--secondary-text', '\(secondaryText)');
+                    root.style.setProperty('--line', '\(line)');
+                    root.style.setProperty('--soft-line', '\(softLine)');
+                    root.style.setProperty('--code-bg', '\(codeBg)');
+                    root.style.setProperty('--quote-bg', '\(quoteBg)');
+                    root.style.setProperty('--table-stripe', '\(tableStripe)');
+                    
+                    var lightStyle = document.getElementById('hljs-light');
+                    var darkStyle = document.getElementById('hljs-dark');
+                    if (lightStyle) { lightStyle.disabled = \(isDark ? "true" : "false"); }
+                    if (darkStyle) { darkStyle.disabled = \(!isDark ? "true" : "false"); }
+                    
+                    if (window.mermaid) {
+                        window.mermaid.initialize({
+                            theme: '\(isDark ? "dark" : "default")',
+                            securityLevel: 'strict'
+                        });
+                        document.querySelectorAll('.mermaid').forEach(function(el) {
+                            var src = el.getAttribute('data-mermaid-src');
+                            if (src) {
+                                el.innerHTML = '';
+                                el.textContent = src;
+                                el.removeAttribute('data-processed');
+                            }
+                        });
+                        window.mermaid.run();
+                    }
+                    """
+                }
+                
+                script += """
+                })();
+                """
+                webView.evaluateJavaScript(script, completionHandler: nil)
+            }
         }
     }
 
