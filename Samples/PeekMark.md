@@ -1,5 +1,5 @@
 ---
-title: "Ultimate Markdown Preview Stress Test"
+title: "PeekMark"
 author: "ChatGPT"
 description: "A comprehensive markdown document to test markdown preview engines and renderers."
 date: 2026-05-22
@@ -16,57 +16,7 @@ draft: false
 cover: ./assets/cover.png
 ---
 
-# 🚀 Ultimate Markdown Preview Stress Test
-
-Welcome to the **ultimate markdown torture test**.
-
-This file is intentionally packed with:
-
-- Front matter
-- Tables
-- Task lists
-- Nested lists
-- Syntax highlighting
-- Mermaid diagrams
-- LaTeX math
-- Footnotes
-- Blockquotes
-- HTML
-- Alerts / callouts
-- Images
-- Links
-- Collapsible sections
-- Emojis
-- Unicode
-- Code fences
-- Diff blocks
-- YAML / JSON / TOML
-- GitHub flavored markdown
-- Wide content
-- Anchors
-- Horizontal rules
-- Inline formatting
-- Admonitions
-- Keyboard shortcuts
-- Mixed markdown + HTML
-
----
-
-# Table of Contents
-
-1. [Typography](#typography)
-2. [Lists](#lists)
-3. [Tables](#tables)
-4. [Code Blocks](#code-blocks)
-5. [LaTeX](#latex)
-6. [Mermaid](#mermaid)
-7. [HTML](#html)
-8. [Callouts](#callouts)
-9. [Media](#media)
-10. [Advanced Layout](#advanced-layout)
-11. [Wide Content](#wide-content)
-12. [Footnotes](#footnotes)
-13. [Edge Cases](#edge-cases)
+# 📑 Welcome to PeekMark
 
 ---
 
