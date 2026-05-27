@@ -5,15 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DERIVED_DATA_APP_PATH="$ROOT_DIR/.build/DerivedData/Build/Products/Debug/PeekMark.app"
 INSTALL_PATH="/Applications/PeekMark.app"
-SYSTEM_LOG="$ROOT_DIR/docs/system-changes.md"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-
-log_system_change() {
-  mkdir -p "$(dirname "$SYSTEM_LOG")"
-  {
-    echo "- $(date '+%Y-%m-%d %H:%M:%S %Z') $1"
-  } >>"$SYSTEM_LOG"
-}
 
 bundle_identifier() {
   local target="$1"
@@ -46,15 +38,15 @@ unregister_launch_services() {
 
   if [[ -d "$target" ]]; then
     if output="$("$LSREGISTER" -u "$target" 2>&1)"; then
-      log_system_change "Unregistered Launch Services entry for $target with lsregister -u."
+      echo "Unregistered Launch Services entry for $target."
     else
       exit_status=$?
       echo "Warning: lsregister -u could not unregister $target (status $exit_status): $output" >&2
       output="${output//$'\n'/ }"
-      log_system_change "Launch Services unregister for $target returned status $exit_status and was treated as non-fatal: $output"
+      echo "Launch Services unregister for $target returned status $exit_status and was treated as non-fatal."
     fi
   else
-    log_system_change "Skipped Launch Services unregister for $target because the bundle is not present."
+    echo "Skipped Launch Services unregister for $target because the bundle is not present."
   fi
 }
 
@@ -71,7 +63,6 @@ remove_installed_app() {
 
   if [[ -d "$INSTALL_PATH" ]]; then
     rm -rf "$INSTALL_PATH"
-    log_system_change "Removed /Applications/PeekMark.app."
   else
     echo "PeekMark is not installed at $INSTALL_PATH"
   fi
@@ -88,6 +79,5 @@ remove_installed_app
 
 qlmanage -r cache
 qlmanage -r
-log_system_change "Reset Quick Look cache and reloaded quicklookd after uninstall."
 
 echo "PeekMark uninstall complete"

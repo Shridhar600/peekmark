@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DERIVED_DATA_DIR="$ROOT_DIR/.build/DerivedData"
-CONFIGURATION="${CONFIGURATION:-Debug}"
+CONFIGURATION="${CONFIGURATION:-Release}"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 APP_PATH="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/PeekMark.app"
 DIST_DIR="$ROOT_DIR/dist"

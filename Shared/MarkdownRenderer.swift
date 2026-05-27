@@ -171,7 +171,8 @@ enum MarkdownRenderer {
         for footnote in footnotes {
             let contentDoc = Document(parsing: footnote.content)
             var contentHTML = HTMLFormatter.format(contentDoc)
-            
+            contentHTML = HTMLSanitizer.sanitizeGeneratedHTML(contentHTML)
+
             if contentHTML.hasPrefix("<p>") && contentHTML.hasSuffix("</p>\n") {
                 contentHTML = String(contentHTML.dropFirst(3).dropLast(5))
             } else if contentHTML.hasPrefix("<p>") && contentHTML.hasSuffix("</p>") {
@@ -434,7 +435,7 @@ enum MarkdownRenderer {
               mermaid.initialize({
                 startOnLoad: false,
                 theme: isDark ? 'dark' : 'default',
-                securityLevel: 'loose'
+                securityLevel: 'strict'
               });
               mermaid.run();
             })();

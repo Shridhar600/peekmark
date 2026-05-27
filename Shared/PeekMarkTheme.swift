@@ -12,6 +12,7 @@ enum MarkdownAppearance: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     #if canImport(AppKit)
+    @MainActor
     var resolved: MarkdownAppearance {
         switch self {
         case .system:
