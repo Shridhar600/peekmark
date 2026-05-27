@@ -10,7 +10,7 @@ settings:
 packages:
   swift-markdown:
     url: https://github.com/swiftlang/swift-markdown.git
-    from: 0.8.0
+    exactVersion: 0.8.0
 targets:
   PeekMark:
     type: application

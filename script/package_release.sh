@@ -43,6 +43,7 @@ xcodebuild \
   -configuration "$CONFIGURATION" \
   -derivedDataPath "$DERIVED_DATA_DIR" \
   CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
   clean build
 
 verify_clean_entitlements "$APP_PATH" true true

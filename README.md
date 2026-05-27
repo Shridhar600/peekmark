@@ -52,6 +52,8 @@ It renders GitHub Flavored Markdown (GFM) with rich inline features — LaTeX ma
 
 ### Build & Run
 
+PeekMark is currently intended for local source builds. Downloadable, notarized `.app` distribution is not part of the current free release path.
+
 ```bash
 # Generate Xcode project
 xcodegen --project .
@@ -88,7 +90,7 @@ xcodebuild -project PeekMark.xcodeproj -scheme PeekMark test
 PeekMark is designed with privacy as a core requirement:
 
 - **Sandboxed**: The app runs in Apple's App Sandbox with minimal entitlements. It only accesses files you explicitly open.
-- **No Network Access**: All rendering assets (KaTeX, Mermaid, Highlight.js) are loaded locally. The app makes no network requests.
+- **Limited Network Requirement Today**: The current renderer loads KaTeX, Mermaid, and Highlight.js assets from pinned CDN URLs with Subresource Integrity. Removing this runtime network dependency is planned before a stricter offline/no-network release.
 - **No Tracking**: No analytics, telemetry, or crash reporting. No data collection of any kind.
 - **Local Processing**: All Markdown parsing and rendering happens on-device. Your files never leave your machine.
 - **Open Source**: Full source available for review. Built entirely with Swift and open-source libraries.
@@ -119,7 +121,6 @@ Shared/                   Shared code (renderer, sanitizer, models)
 Assets/                   App icon, screenshots
 Tests/                    Unit tests and validation scripts
 script/                   Build, install, and release scripts
-WebAssets/                Bundled web rendering assets
 ```
 
 ---
