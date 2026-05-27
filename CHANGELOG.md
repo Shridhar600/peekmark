@@ -10,7 +10,6 @@ All notable changes to PeekMark will be documented in this file.
 - `nonisolated(unsafe)` annotations for QuickLook extension Sendable conformance
 - `@MainActor` isolation on `MarkdownAppearance.resolved`
 - `OSAllocatedUnfairLock` for thread-safe continuation completion
-- Vendored web assets directory structure (`WebAssets/`)
 
 ### Fixed
 - Search highlighting JS: `queryLower` → `query.toLowerCase()` undefined variable
@@ -21,7 +20,7 @@ All notable changes to PeekMark will be documented in this file.
 - `evaluateJavaScript` callback/deprecation warnings
 
 ### Changed
-- Strict CSP: removed CDN allowlist (preparation for local asset bundling)
+- CSP tightened while retaining the CDN allowlist required by the current renderer
 - `withCheckedContinuation` timeout pattern uses `OSAllocatedUnfairLock`
 - Default packaged build configuration: `Release`
 - Rewrote `openwith_ui_check.sh` for current UI patterns
@@ -31,12 +30,12 @@ All notable changes to PeekMark will be documented in this file.
 - Internal docs from tracking (`PeekMark.xcodeproj/` gitignored)
 - Internal development docs and audit files
 - Stale grep patterns from packaging checks
+- Placeholder Homebrew cask until a real release artifact and checksum exist
 
 ## 2026-05-27
 
 ### Added
 - MIT LICENSE file
-- Homebrew Cask file
 
 ### Security
 - Fixed ReDoS in HTMLSanitizer regex (possessive quantifiers)

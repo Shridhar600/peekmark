@@ -15,10 +15,10 @@ Open a GitHub issue with the **Security** label, or email the maintainers direct
 
 ## Security Model
 
-- **Sandboxed**: The app runs in Apple's App Sandbox with minimal entitlements (file access only).
+- **Sandboxed**: The app runs in Apple's App Sandbox with user-selected read-only file access and app-scoped bookmarks.
 - **WKWebView CSP**: A strict Content-Security-Policy is enforced on all rendered content.
 - **HTML Sanitizer**: All generated HTML passes through `HTMLSanitizer` which strips remote resources, `javascript:` URIs, and potentially unsafe HTML constructs.
-- **No Remote Code Execution**: The app does not load remote scripts, styles, or fonts. All rendering assets are bundled locally.
+- **Pinned Remote Renderer Assets**: The current renderer loads KaTeX, Mermaid, and Highlight.js from CDN URLs with SRI hashes. Fully vendored offline assets are planned but not currently implemented.
 - **Security-Scoped Bookmarks**: File access outside the sandbox uses macOS security-scoped bookmarks.
 
 ## What to Report
