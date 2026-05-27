@@ -38,6 +38,42 @@ enum HTMLSanitizer {
             options: []
         )
     }()
+    private static let fileURLQuotedRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)\s+href\s*=\s*(['"])file://[^'"]*\1"#,
+            options: []
+        )
+    }()
+    private static let fileURLUnquotedRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)\s+href\s*=\s*file://[^\s>]*"#,
+            options: []
+        )
+    }()
+    private static let remoteHrefQuotedRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)\s+href\s*=\s*(['"])https?://[^'"]*\1"#,
+            options: []
+        )
+    }()
+    private static let remoteHrefUnquotedRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)\s+href\s*=\s*https?://[^\s>]*"#,
+            options: []
+        )
+    }()
+    private static let remoteImgSrcRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)<img\b[^>]*?\s+src\s*=\s*(['"])https?://[^'"]*\1[^>]*/?\s*>"#,
+            options: []
+        )
+    }()
+    private static let svgDataSrcRegex: NSRegularExpression? = {
+        try? NSRegularExpression(
+            pattern: #"(?i)<img\b[^>]*?\s+src\s*=\s*(['"])data:image/svg[^'"]*\1[^>]*/?\s*>"#,
+            options: []
+        )
+    }()
 
     static func escape(_ value: String) -> String {
         value
@@ -66,6 +102,24 @@ enum HTMLSanitizer {
             output = replace(regex: regex, in: output, with: "")
         }
         if let regex = styleAttrRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = fileURLQuotedRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = fileURLUnquotedRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = remoteHrefQuotedRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = remoteHrefUnquotedRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = remoteImgSrcRegex {
+            output = replace(regex: regex, in: output, with: "")
+        }
+        if let regex = svgDataSrcRegex {
             output = replace(regex: regex, in: output, with: "")
         }
         return output

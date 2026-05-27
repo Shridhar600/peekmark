@@ -82,8 +82,8 @@ final class MarkdownRendererTests: XCTestCase {
 
         let result = await MarkdownRenderer.render(markdown: markdown, title: "Unsafe")
 
-        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("<script"))
-        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("javascript:"))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<script"))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("javascript:"))
     }
 
     func testSanitizesRawHTMLRemoteResources() async {
@@ -98,12 +98,12 @@ final class MarkdownRendererTests: XCTestCase {
 
         let result = await MarkdownRenderer.render(markdown: markdown, title: "Unsafe HTML")
 
-        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("https://example.com"))
-        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("file:///"))
-        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("javascript:"))
-        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("data:image/svg"))
-        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("<link"))
-        XCTAssertFalse(result.html.localizedCaseInsensitiveContains("style="))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("javascript:"))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<link"))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("style="))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("https://example.com"))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("file:///"))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("data:image/svg"))
     }
 
     func testDoesNotEmbedSymlinkEscapingDocumentDirectory() async throws {
@@ -182,7 +182,21 @@ final class MarkdownRendererTests: XCTestCase {
             baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
         )
 
-        XCTAssertFalse(result.html.contains("https://example.com/pixel.png"))
+        XCTAssertFalse(result.html.contains("data:image/"))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("https://example.com/pixel.png"))
+    }
+
+    func testSanitizesFootnotes() async {
+        let markdown = """
+        Here is a footnote[^1].
+
+        [^1]: text <script>alert("x")</script> and [bad](javascript:alert(1))
+        """
+
+        let result = await MarkdownRenderer.render(markdown: markdown, title: "Footnotes")
+
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<script"))
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("javascript:"))
     }
 
     func testParsesYAMLMetadataAndDoesNotRenderTable() async {

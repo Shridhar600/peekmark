@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -240,15 +241,11 @@ struct ContentView: View {
 
     private func loadFileURL(from provider: NSItemProvider) async -> URL? {
         await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
-            // A serial queue ensures that only one caller ever resumes the continuation,
-            // preventing crashes when both the timeout task and the loadItem callback
-            // try to resume after Task.cancel() fails to stop already-executing code.
-            let queue = DispatchQueue(label: "com.peekmark.loadFileURL.resume")
-            var hasResumed = false
+            let flag = OSAllocatedUnfairLock(initialState: false)
 
             let timeoutTask = Task {
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
-                queue.sync {
+                flag.withLock { hasResumed in
                     if !hasResumed {
                         hasResumed = true
                         continuation.resume(returning: nil)
@@ -257,11 +254,12 @@ struct ContentView: View {
             }
 
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                let data = item as? Data
                 timeoutTask.cancel()
-                queue.sync {
+                flag.withLock { hasResumed in
                     if !hasResumed {
                         hasResumed = true
-                        if let data = item as? Data,
+                        if let data,
                            let url = URL(dataRepresentation: data, relativeTo: nil) {
                             continuation.resume(returning: url)
                         } else {

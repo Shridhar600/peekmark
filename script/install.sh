@@ -8,17 +8,7 @@ CONFIGURATION="${CONFIGURATION:-Debug}"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 APP_PATH="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/PeekMark.app"
 INSTALL_PATH="/Applications/PeekMark.app"
-SYSTEM_LOG="$ROOT_DIR/docs/system-changes.md"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-
-
-
-log_system_change() {
-  mkdir -p "$(dirname "$SYSTEM_LOG")"
-  {
-    echo "- $(date '+%Y-%m-%d %H:%M:%S %Z') $1"
-  } >>"$SYSTEM_LOG"
-}
 
 bundle_identifier() {
   local target="$1"
@@ -51,15 +41,15 @@ unregister_launch_services() {
 
   if [[ -d "$target" ]]; then
     if output="$("$LSREGISTER" -u "$target" 2>&1)"; then
-      log_system_change "Unregistered Launch Services entry for $target with lsregister -u."
+      echo "Unregistered Launch Services entry for $target."
     else
       exit_status=$?
       echo "Warning: lsregister -u could not unregister $target (status $exit_status): $output" >&2
       output="${output//$'\n'/ }"
-      log_system_change "Launch Services unregister for $target returned status $exit_status and was treated as non-fatal: $output"
+      echo "Launch Services unregister for $target returned status $exit_status and was treated as non-fatal."
     fi
   else
-    log_system_change "Skipped Launch Services unregister for $target because the bundle is not present."
+    echo "Skipped Launch Services unregister for $target because the bundle is not present."
   fi
 }
 
@@ -76,7 +66,7 @@ remove_existing_install() {
 
   if [[ -d "$INSTALL_PATH" ]]; then
     rm -rf "$INSTALL_PATH"
-    log_system_change "Removed existing /Applications/PeekMark.app before reinstall."
+    echo "Removed existing /Applications/PeekMark.app before reinstall."
   fi
 }
 
@@ -140,13 +130,10 @@ unregister_launch_services "$INSTALL_PATH"
 unregister_launch_services "$APP_PATH"
 remove_existing_install
 ditto "$APP_PATH" "$INSTALL_PATH"
-log_system_change "Installed /Applications/PeekMark.app from $APP_PATH using ditto."
 
 open -na "$INSTALL_PATH"
-log_system_change "Launched /Applications/PeekMark.app once to refresh Launch Services and Quick Look registration."
 
 qlmanage -r cache
 qlmanage -r
-log_system_change "Reset Quick Look cache and reloaded quicklookd with qlmanage -r cache and qlmanage -r."
 
 "$ROOT_DIR/script/verify_install.sh"

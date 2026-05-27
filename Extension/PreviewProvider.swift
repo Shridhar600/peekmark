@@ -1,19 +1,16 @@
 import Foundation
-import QuickLookUI
-import UniformTypeIdentifiers
-
-import Foundation
-import QuickLookUI
+@preconcurrency import QuickLookUI
 import UniformTypeIdentifiers
 import Markdown
 
 final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
     func providePreview(for request: QLFilePreviewRequest, completionHandler handler: @escaping (QLPreviewReply?, Error?) -> Void) {
         let title = request.fileURL.deletingPathExtension().lastPathComponent
+        let isDark = NSAppearance.currentDrawing().bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let resolvedAppearance: MarkdownAppearance = isDark ? .dark : .light
+        nonisolated(unsafe) let sendableHandler = handler
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let isDark = NSAppearance.current.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            let resolvedAppearance: MarkdownAppearance = isDark ? .dark : .light
 
             let result: MarkdownRenderResult
 
@@ -54,7 +51,7 @@ final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
                 return data
             }
             reply.title = result.title
-            handler(reply, nil)
+            sendableHandler(reply, nil)
         }
     }
 }

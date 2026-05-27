@@ -128,7 +128,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 let headingBottomMargin = String(format: "%.2fem", fontSize * 0.02)
                 let cssFamily = font.cssFamily.replacingOccurrences(of: "\"", with: "\\\"")
 
-                let isDark = resolvedAppearance == .dark
+            let isDark = resolvedAppearance == .dark
 
                 if fontVarsChanged {
                     let capturedFontSize = fontSize
@@ -260,6 +260,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
             let script = """
             (function() {
                 var root = document.documentElement;
+                var isDark = \(isDark);
                 
                 // Fonts
                 root.style.setProperty('--font-size', '\(fontSize)px');
@@ -374,7 +375,7 @@ func debouncedHighlightSearch(in webView: WKWebView, text: String) {
                         mark.appendChild(document.createTextNode(text.substring(idx, idx + query.length)));
                         frag.appendChild(mark);
                         last = idx + query.length;
-                        idx = lower.indexOf(queryLower, last);
+                        idx = lower.indexOf(query.toLowerCase(), last);
                     }
                     frag.appendChild(document.createTextNode(text.substring(last)));
                     textNode.parentNode.replaceChild(frag, textNode);
@@ -386,9 +387,13 @@ func debouncedHighlightSearch(in webView: WKWebView, text: String) {
             })();
             """
 
-            searchDebouncer.debounce { [weak webView] in
-                webView?.evaluateJavaScript(script, completionHandler: nil)
+            searchDebouncer.debounce { [weak self, weak webView] in
+                self?.searchHighlightEvaluate(script, in: webView)
             }
+        }
+
+        private func searchHighlightEvaluate(_ script: String, in webView: WKWebView?) {
+            webView?.evaluateJavaScript(script, completionHandler: nil)
         }
     }
 }
