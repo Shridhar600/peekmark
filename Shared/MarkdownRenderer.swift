@@ -363,19 +363,22 @@ enum MarkdownRenderer {
                 pre.parentNode.replaceChild(div, pre);
             });
 
-            // Run Highlight.js
-            hljs.highlightAll();
+            // Run optional vendor enhancements only when their assets loaded.
+            if (window.hljs && typeof window.hljs.highlightAll === 'function') {
+                window.hljs.highlightAll();
+            }
 
-            // Run KaTeX auto-render
-            renderMathInElement(document.body, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                    {left: '\\\\(', right: '\\\\)', display: false},
-                    {left: '\\\\[', right: '\\\\]', display: true}
-                ],
-                throwOnError : false
-            });
+            if (typeof window.renderMathInElement === 'function') {
+                window.renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\\\(', right: '\\\\)', display: false},
+                        {left: '\\\\[', right: '\\\\]', display: true}
+                    ],
+                    throwOnError : false
+                });
+            }
 
             // Add Word Wrap and Copy buttons to all pre blocks (except mermaid blocks)
             document.querySelectorAll('pre').forEach(function(pre) {
@@ -432,12 +435,14 @@ enum MarkdownRenderer {
               if (appearance === 'system') {
                 isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
               }
-              mermaid.initialize({
-                startOnLoad: false,
-                theme: isDark ? 'dark' : 'default',
-                securityLevel: 'strict'
-              });
-              mermaid.run();
+              if (window.mermaid && typeof window.mermaid.initialize === 'function' && typeof window.mermaid.run === 'function') {
+                window.mermaid.initialize({
+                  startOnLoad: false,
+                  theme: isDark ? 'dark' : 'default',
+                  securityLevel: 'strict'
+                });
+                window.mermaid.run();
+              }
             })();
           </script>
         </body>

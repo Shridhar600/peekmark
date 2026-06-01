@@ -221,6 +221,16 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(result.bodyHTML.contains("Metadata Test"))
         XCTAssertTrue(result.bodyHTML.contains("<h1>Title</h1>"))
     }
+
+    func testVendorEnhancementsAreDefensiveWhenAssetsFailToLoad() async {
+        let result = await MarkdownRenderer.render(markdown: "# Title\n\n```swift\nprint(\"hello\")\n```", title: "Doc")
+
+        XCTAssertTrue(result.html.contains("if (window.hljs && typeof window.hljs.highlightAll === 'function')"))
+        XCTAssertTrue(result.html.contains("if (typeof window.renderMathInElement === 'function')"))
+        XCTAssertTrue(result.html.contains("if (window.mermaid && typeof window.mermaid.initialize === 'function' && typeof window.mermaid.run === 'function')"))
+        XCTAssertFalse(result.html.contains("\n            hljs.highlightAll();"))
+        XCTAssertFalse(result.html.contains("\n              mermaid.initialize({"))
+    }
 }
 
 private extension String {
