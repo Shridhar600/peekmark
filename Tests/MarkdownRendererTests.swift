@@ -234,8 +234,8 @@ final class MarkdownRendererTests: XCTestCase {
     func testUsesBundledWebAssetsWhenAvailable() async {
         let result = await MarkdownRenderer.render(markdown: "# Title\n\nInline math $x^2$.", title: "Doc")
 
-        XCTAssertTrue(result.html.contains(#"<style id="hljs-light">"#))
-        XCTAssertTrue(result.html.contains(#"<style id="katex-style">"#))
+        XCTAssertTrue(result.html.contains(#"<style id="hljs-light" media="all">"#))
+        XCTAssertTrue(result.html.contains(#"<style id="katex-style" media="all">"#))
         XCTAssertTrue(result.html.contains(#"<script id="hljs-script">"#))
         XCTAssertTrue(result.html.contains(#"<script id="katex-script">"#))
         XCTAssertTrue(result.html.contains(#"<script id="katex-auto-render-script">"#))
