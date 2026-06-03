@@ -105,24 +105,6 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("data:image/svg"))
     }
 
-    func testDoesNotEmbedSymlinkEscapingDocumentDirectory() async throws {
-        let root = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let docDirectory = root.appendingPathComponent("doc", isDirectory: true)
-        let outsideDirectory = root.appendingPathComponent("outside", isDirectory: true)
-        try FileManager.default.createDirectory(at: docDirectory, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
-
-        let outsideImage = outsideDirectory.appendingPathComponent("secret.png")
-        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: outsideImage)
-        let symlink = docDirectory.appendingPathComponent("leak.png")
-        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: outsideImage)
-
-        let result = await MarkdownRenderer.render(markdown: "![leak](leak.png)", title: "Image", baseURL: docDirectory)
-
-        XCTAssertFalse(result.html.contains("src=\"data:image/png;base64,"))
-    }
-
     func testEscapesErrorHTML() {
         let result = MarkdownRenderer.renderError(title: "<bad>", message: "<script>alert(1)</script>")
 
@@ -131,47 +113,62 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(result.html.contains("<bad>"))
     }
 
-    func testEmbedsRelativeImageAsDataURI() async throws {
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let imageURL = directory.appendingPathComponent("dot.png")
-        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: imageURL)
+    func testStripsLocalRelativeImageMarkdownSyntax() async {
+        let result = await MarkdownRenderer.render(
+            markdown: "![local](local.png)",
+            title: "Local Image",
+            baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
+        )
 
-        let result = await MarkdownRenderer.render(markdown: "![dot](dot.png)", title: "Image", baseURL: directory)
-
-        XCTAssertTrue(result.html.contains("src=\"data:image/png;base64,"))
+        XCTAssertFalse(result.bodyHTML.contains("local.png"), "local image src should be stripped, got: \(result.bodyHTML)")
+        XCTAssertFalse(result.bodyHTML.contains("<img"), "no <img> tag should remain for a local relative reference")
     }
 
-    func testDoesNotEmbedRelativeSVGAsDataURI() async throws {
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let imageURL = directory.appendingPathComponent("active.svg")
-        try "<svg onload=\"alert(1)\"></svg>".data(using: .utf8)!.write(to: imageURL)
+    func testStripsLocalRelativeImageRawHTMLDoubleQuoted() async {
+        let result = await MarkdownRenderer.render(
+            markdown: "<img src=\"local.png\" alt=\"x\">",
+            title: "Local Image",
+            baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
+        )
 
-        let result = await MarkdownRenderer.render(markdown: "![active](active.svg)", title: "Image", baseURL: directory)
-
-        XCTAssertFalse(result.html.contains("data:image/svg+xml"))
+        XCTAssertFalse(result.bodyHTML.contains("<img"), "no <img> tag should remain for a local relative reference")
+        XCTAssertFalse(result.bodyHTML.contains("local.png"))
     }
 
-    func testStopsEmbeddingImagesAfterAggregateLimit() async throws {
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let imageData = Data(repeating: 0x41, count: 4 * 1024 * 1024)
-        for index in 1...4 {
-            try imageData.write(to: directory.appendingPathComponent("image-\(index).png"))
-        }
+    func testStripsLocalRelativeImageRawHTMLSingleQuoted() async {
+        let result = await MarkdownRenderer.render(
+            markdown: "<img src='local.png' alt='x'>",
+            title: "Local Image",
+            baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
+        )
 
-        let markdown = (1...4)
-            .map { "![image-\($0)](image-\($0).png)" }
-            .joined(separator: "\n")
+        XCTAssertFalse(result.bodyHTML.contains("<img"), "no <img> tag should remain for a local relative reference")
+        XCTAssertFalse(result.bodyHTML.contains("local.png"))
+    }
 
-        let result = await MarkdownRenderer.render(markdown: markdown, title: "Images", baseURL: directory)
-        let embeddedImageCount = result.html.components(separatedBy: "src=\"data:image/png;base64,").count - 1
+    func testStripsLocalRelativeImageRawHTMLUnquoted() async {
+        let result = await MarkdownRenderer.render(
+            markdown: "<img src=local.png alt=x>",
+            title: "Local Image",
+            baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
+        )
 
-        XCTAssertEqual(embeddedImageCount, 3)
+        XCTAssertFalse(result.bodyHTML.contains("<img"), "no <img> tag should remain for a local relative reference")
+        XCTAssertFalse(result.bodyHTML.contains("local.png"))
+    }
+
+    func testKeepsRasterDataURIImageTags() async {
+        // Inline raster data URIs in the source markdown are self-contained and
+        // don't depend on the sandbox. They should be preserved verbatim.
+        let dataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+        let result = await MarkdownRenderer.render(
+            markdown: "<img src=\"\(dataURI)\" alt=\"pixel\">",
+            title: "Data URI",
+            baseURL: nil
+        )
+
+        XCTAssertTrue(result.bodyHTML.contains(dataURI), "raster data URI should be kept")
+        XCTAssertTrue(result.bodyHTML.contains("<img"), "raster data URI <img> tag should be kept")
     }
 
     func testStripsRemoteImageSources() async {
@@ -183,6 +180,17 @@ final class MarkdownRendererTests: XCTestCase {
 
         XCTAssertFalse(result.bodyHTML.contains("data:image/"))
         XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("https://example.com/pixel.png"))
+    }
+
+    func testStripsSVGDataURIImageSources() async {
+        let result = await MarkdownRenderer.render(
+            markdown: "<img src=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnLz4=\" alt=\"x\">",
+            title: "SVG Data URI",
+            baseURL: nil
+        )
+
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("data:image/svg"))
+        XCTAssertFalse(result.bodyHTML.contains("<img"))
     }
 
     func testSanitizesFootnotes() async {
@@ -245,6 +253,211 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(result.html.contains(#"src="https://cdn.jsdelivr.net"#))
         XCTAssertFalse(result.html.contains(#"href="https://cdnjs.cloudflare.com"#))
         XCTAssertFalse(result.html.contains(#"href="https://cdn.jsdelivr.net"#))
+    }
+
+    func testDocumentHTMLWithBundledAssetsRendersFullPreview() {
+        let result = MarkdownRenderer.documentHTML(
+            title: "Doc",
+            body: "<h1>Hello</h1>",
+            appearance: .light,
+            font: .system,
+            fontSize: 14.5,
+            spacing: .regular,
+            isTransparent: false,
+            webAssets: WebAssetBundle(
+                highlightLightCSS: "/*light*/",
+                highlightDarkCSS: "/*dark*/",
+                highlightJS: "//hljs",
+                katexCSS: "/*katex*/",
+                katexJS: "//katex",
+                katexAutoRenderJS: "//autorender",
+                mermaidJS: "//mermaid"
+            )
+        )
+
+        XCTAssertTrue(result.contains(#"<style id="hljs-light" media="all">/*light*/</style>"#))
+        XCTAssertTrue(result.contains(#"<style id="hljs-dark" media="not all">/*dark*/</style>"#))
+        XCTAssertTrue(result.contains(#"<script id="hljs-script">//hljs</script>"#))
+        XCTAssertTrue(result.contains(#"<style id="katex-style" media="all">/*katex*/</style>"#))
+        XCTAssertTrue(result.contains(#"<script id="katex-script">//katex</script>"#))
+        XCTAssertTrue(result.contains(#"<script id="katex-auto-render-script">//autorender</script>"#))
+        XCTAssertTrue(result.contains(#"<script id="mermaid-script">//mermaid</script>"#))
+        XCTAssertFalse(result.contains("peekmark-asset-error"))
+        XCTAssertTrue(result.contains("default-src 'none'"))
+        XCTAssertTrue(result.contains("connect-src 'none'"))
+        XCTAssertFalse(result.contains("cdnjs.cloudflare.com"))
+        XCTAssertFalse(result.contains("cdn.jsdelivr.net"))
+    }
+
+    func testDocumentHTMLWithoutBundledAssetsRendersErrorBannerAndStillRendersBody() {
+        let result = MarkdownRenderer.documentHTML(
+            title: "Doc",
+            body: "<h1>Hello</h1><pre><code class=\"language-mermaid\">graph TD; A-->B;</code></pre>",
+            appearance: .light,
+            font: .system,
+            fontSize: 14.5,
+            spacing: .regular,
+            isTransparent: false,
+            webAssets: nil
+        )
+
+        XCTAssertTrue(result.contains("peekmark-asset-error"))
+        XCTAssertTrue(result.contains("PeekMark failed to load bundled web assets"))
+        XCTAssertTrue(result.contains("<h1>Hello</h1>"))
+        XCTAssertTrue(result.contains("language-mermaid"))
+        XCTAssertTrue(result.contains("connect-src 'none'"))
+
+        XCTAssertFalse(result.contains(#"<script id="hljs-script">"#))
+        XCTAssertFalse(result.contains(#"<script id="katex-script">"#))
+        XCTAssertFalse(result.contains(#"<script id="mermaid-script">"#))
+        XCTAssertFalse(result.contains(#"<style id="katex-style""#))
+        XCTAssertFalse(result.contains("cdnjs.cloudflare.com"))
+        XCTAssertFalse(result.contains("cdn.jsdelivr.net"))
+    }
+
+    func testSampleFileDoesNotEmbedLocalImages() async throws {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let samplePath = repoRoot.appendingPathComponent("Samples/PeekMark.md")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: samplePath.path), "sample file missing")
+
+        let markdown = try String(contentsOf: samplePath, encoding: .utf8)
+        let result = await MarkdownRenderer.render(
+            markdown: markdown,
+            title: "PeekMark",
+            baseURL: samplePath.deletingLastPathComponent()
+        )
+
+        let body = result.bodyHTML
+        // The sample contains a real, renderable inline raster data URI
+        // (added in the F6/F7 follow-up). The renderer must preserve it.
+        // The substring `data:image/png;base64,` only appears in the body
+        // if a real `<img src="data:image/png;base64,…">` tag survived
+        // sanitization — no markdown prose, no code span, no
+        // sanitizer-emitted constant contains that exact substring.
+        XCTAssertTrue(body.contains("data:image/png;base64,"),
+                      "inline raster data URI from sample should be preserved as a real <img> tag")
+        // The sample's Media section mentions `<img>` and `src=` inside
+        // backtick code spans. After sanitization those should still be
+        // present (as `<code>…</code>` content, not as real <img> tags).
+        // Asserting presence confirms the code spans rendered correctly.
+        XCTAssertTrue(body.contains("<code>") || !markdown.contains("`<"),
+                      "no backtick code spans in source")
+    }
+
+    // MARK: - F1 regression: raster data URI preservation across quote variants
+
+    func testKeepsRasterDataURIImageTagsAcrossQuoteVariants() async {
+        // The `localImgTagRegex` negative lookahead used to be anchored on a
+        // literal `"`, which silently stripped single-quoted and unquoted
+        // raster data URIs even though README/SECURITY promise they are
+        // preserved. The fix makes the opening quote optional in the lookahead.
+        let pngDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+        let jpegDataURI = pngDataURI.replacingOccurrences(of: "image/png", with: "image/jpeg")
+
+        let cases: [(label: String, markdown: String, expectedURI: String)] = [
+            ("double-quoted", "<img src=\"\(pngDataURI)\" alt=\"pixel\">", pngDataURI),
+            ("single-quoted", "<img src='\(pngDataURI)' alt='pixel'>", pngDataURI),
+            ("unquoted", "<img src=\(pngDataURI) alt=pixel>", pngDataURI),
+            ("extra spaces", "<img src = \"\(pngDataURI)\" alt = \"pixel\">", pngDataURI),
+            ("uppercase tag", "<IMG SRC='\(pngDataURI)' ALT='pixel'>", pngDataURI),
+            ("jpeg single-quoted", "<img src='\(jpegDataURI)' alt='x'>", jpegDataURI),
+        ]
+
+        for (label, markdown, expectedURI) in cases {
+            let result = await MarkdownRenderer.render(markdown: markdown, title: "Data URI \(label)", baseURL: nil)
+            XCTAssertTrue(
+                result.bodyHTML.localizedCaseInsensitiveContains(expectedURI),
+                "raster data URI should be kept for \(label) variant, got: \(result.bodyHTML)"
+            )
+            XCTAssertTrue(
+                result.bodyHTML.localizedCaseInsensitiveContains("<img"),
+                "raster data URI <img> tag should be kept for \(label) variant, got: \(result.bodyHTML)"
+            )
+        }
+    }
+
+    func testStripsSingleQuotedLocalRelativeImageAfterRasterFix() async {
+        // Regression check: after the F1 fix that makes the opening quote in
+        // the `localImgTagRegex` negative lookahead optional, the strip path
+        // for single-quoted local relative images must still work. The fix
+        // was a negative-lookahead *allow*, not a negative-lookahead *deny*,
+        // so local images in any quote style are still stripped.
+        let result = await MarkdownRenderer.render(
+            markdown: "<img src='local.png' alt='x'>",
+            title: "Local Image",
+            baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
+        )
+
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<img"), "single-quoted local <img> must still be stripped")
+        XCTAssertFalse(result.bodyHTML.contains("local.png"))
+    }
+
+    // MARK: - F2: video / audio / source / track / picture
+
+    func testStripsVideoTag() async {
+        let result = await MarkdownRenderer.render(
+            markdown: """
+            <video src="local.mp4" controls></video>
+            <video controls><source src="local.mp4" type="video/mp4"></video>
+            """,
+            title: "Video"
+        )
+
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("local.mp4"), "video src must be stripped, got: \(result.bodyHTML)")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<video"), "<video> tag must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<source"), "<source> tag must be stripped")
+    }
+
+    func testStripsAudioAndTrackTags() async {
+        let result = await MarkdownRenderer.render(
+            markdown: """
+            <audio src="local.mp3"></audio>
+            <track src="local.vtt">
+            """,
+            title: "Media"
+        )
+
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("local.mp3"), "audio src must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("local.vtt"), "track src must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<audio"), "<audio> tag must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<track"), "<track> tag must be stripped")
+    }
+
+    func testStripsPictureWithSourceAndImg() async {
+        // F5 case: a <picture><source srcset="…"> wrapper would leak the
+        // remote URL via `srcset` even though CSP blocks the fetch. Stripping
+        // the whole <picture> / <source> / <img> tags via the extended
+        // `tagTags` list removes the URL string from the DOM.
+        let result = await MarkdownRenderer.render(
+            markdown: "<picture><source srcset=\"https://x.com/y.png\"><img src=\"local.png\"></picture>",
+            title: "Picture"
+        )
+
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("x.com"), "remote srcset URL must be stripped")
+        XCTAssertFalse(result.bodyHTML.contains("local.png"), "local img src must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<picture"), "<picture> must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<source"), "<source> must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<img"), "<img> must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("srcset"), "srcset attribute must be stripped")
+    }
+
+    // MARK: - F4: bare <img> with no src
+
+    func testStripsImgWithNoSrcAttribute() async {
+        // Without an `src`, the `localImgTagRegex` (which requires `\bsrc\s*=`)
+        // never matches, leaving a broken-image icon. The `noSrcImgTagRegex`
+        // strip catches these.
+        let result = await MarkdownRenderer.render(
+            markdown: """
+            <img alt="x">
+            <img>
+            """,
+            title: "Bare Img"
+        )
+
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<img"), "<img> with no src must be stripped, got: \(result.bodyHTML)")
     }
 }
 

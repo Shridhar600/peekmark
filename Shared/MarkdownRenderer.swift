@@ -1,6 +1,5 @@
 import Foundation
 import Markdown
-import UniformTypeIdentifiers
 
 struct MarkdownRenderResult {
     let title: String
@@ -85,26 +84,25 @@ enum MarkdownRenderer {
     static func renderBody(markdown: String, baseURL: URL? = nil) -> (bodyHTML: String, headings: [HeadingItem]) {
         let (processedMarkdown, footnotesHTML) = processFootnotes(markdown)
         let document = Document(parsing: processedMarkdown)
+        // `baseURL` is accepted but currently unused for local image embedding
+        // — PeekMark is sandboxed and intentionally does not read sibling image
+        // files in the first public release. See README "Limitations".
+        _ = baseURL
         let body = HTMLSanitizer.sanitizeGeneratedHTML(HTMLFormatter.format(document))
-        let bodyWithImages = embedLocalImages(in: body, baseURL: baseURL)
         let headings = HeadingExtractor.extract(from: document)
-        return (bodyWithImages + footnotesHTML, headings)
+        return (body + footnotesHTML, headings)
     }
 
     static func renderBodyAsync(markdown: String, baseURL: URL? = nil) async -> (bodyHTML: String, headings: [HeadingItem]) {
         let (processedMarkdown, footnotesHTML) = processFootnotes(markdown)
         let document = Document(parsing: processedMarkdown)
+        // `baseURL` is accepted but currently unused for local image embedding
+        // — PeekMark is sandboxed and intentionally does not read sibling image
+        // files in the first public release. See README "Limitations".
+        _ = baseURL
         let body = HTMLSanitizer.sanitizeGeneratedHTML(HTMLFormatter.format(document))
-
-        let bodyWithImages: String
-        if let baseURL = baseURL {
-            bodyWithImages = await ImageEmbeddingActor.shared.rewrite(html: body, baseDirectory: baseURL)
-        } else {
-            bodyWithImages = body
-        }
-
         let headings = HeadingExtractor.extract(from: document)
-        return (bodyWithImages + footnotesHTML, headings)
+        return (body + footnotesHTML, headings)
     }
 
     private static func processFootnotes(_ markdown: String) -> (processedMarkdown: String, footnotesHTML: String) {
@@ -216,21 +214,63 @@ enum MarkdownRenderer {
         spacing: PreviewSpacing,
         isTransparent: Bool
     ) -> String {
+        return documentHTML(
+            title: title,
+            body: body,
+            appearance: appearance,
+            font: font,
+            fontSize: fontSize,
+            spacing: spacing,
+            isTransparent: isTransparent,
+            webAssets: WebAssetBundle.load()
+        )
+    }
+
+    internal static func documentHTML(
+        title: String,
+        body: String,
+        appearance: MarkdownAppearance,
+        font: PreviewFont,
+        fontSize: Double,
+        spacing: PreviewSpacing,
+        isTransparent: Bool,
+        webAssets: WebAssetBundle?
+    ) -> String {
         let isDark = appearance == .dark
-        let webAssets = WebAssetBundle.load()
-        let highlightCSSLink = webAssets?.highlightStyles(isDark: isDark) ?? WebAssetBundle.cdnHighlightStyles(isDark: isDark)
-        let highlightScript = webAssets?.scriptTag(id: "hljs-script", source: \.highlightJS) ?? WebAssetBundle.cdnHighlightScript
-        let katexCSS = webAssets?.styleTag(id: "katex-style", source: \.katexCSS) ?? WebAssetBundle.cdnKatexStyle
-        let katexScript = webAssets?.scriptTag(id: "katex-script", source: \.katexJS) ?? WebAssetBundle.cdnKatexScript
-        let katexAutoRenderScript = webAssets?.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS) ?? WebAssetBundle.cdnKatexAutoRenderScript
-        let mermaidScript = webAssets?.scriptTag(id: "mermaid-script", source: \.mermaidJS) ?? WebAssetBundle.cdnMermaidScript
+        let highlightCSSLink: String
+        let highlightScript: String
+        let katexCSS: String
+        let katexScript: String
+        let katexAutoRenderScript: String
+        let mermaidScript: String
+        let assetErrorBanner: String?
+
+        if let webAssets {
+            highlightCSSLink = webAssets.highlightStyles(isDark: isDark)
+            highlightScript = webAssets.scriptTag(id: "hljs-script", source: \.highlightJS)
+            katexCSS = webAssets.styleTag(id: "katex-style", source: \.katexCSS)
+            katexScript = webAssets.scriptTag(id: "katex-script", source: \.katexJS)
+            katexAutoRenderScript = webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS)
+            mermaidScript = webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS)
+            assetErrorBanner = nil
+        } else {
+            highlightCSSLink = ""
+            highlightScript = ""
+            katexCSS = ""
+            katexScript = ""
+            katexAutoRenderScript = ""
+            mermaidScript = ""
+            assetErrorBanner = """
+            <div class="peekmark-asset-error" style="background:#fff4cc;color:#5a4500;border:1px solid #e0c44a;padding:12px 16px;margin:0 0 16px 0;font:14px -apple-system,system-ui,sans-serif;border-radius:6px;">PeekMark failed to load bundled web assets. Code highlighting, math, and diagrams are disabled in this preview.</div>
+            """
+        }
 
         return """
         <!doctype html>
         <html data-appearance="\(appearance.rawValue)">
         <head>
           <meta charset="utf-8">
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src data: https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self';">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; connect-src 'none';">
           <script>
             // Mock matchMedia to match resolved appearance
             (function() {
@@ -325,6 +365,7 @@ enum MarkdownRenderer {
         </head>
         <body>
           <main>
+        \(assetErrorBanner ?? "")
         \(body)
           </main>
 
@@ -452,142 +493,11 @@ enum MarkdownRenderer {
         </html>
         """
     }
-
-    private static func embedLocalImages(in html: String, baseURL: URL?) -> String {
-        guard let baseURL else {
-            return html
-        }
-        return LocalImageDataURIRewriter.rewrite(html: html, baseDirectory: baseURL)
-    }
-
-    private actor ImageEmbeddingActor {
-        static let shared = ImageEmbeddingActor()
-        private init() {}
-
-        func rewrite(html: String, baseDirectory: URL) -> String {
-            return LocalImageDataURIRewriter.rewrite(html: html, baseDirectory: baseDirectory)
-        }
-    }
-}
-
-private enum LocalImageDataURIRewriter {
-    private static let imgSrcRegex = try! NSRegularExpression(
-        pattern: #"(<img\b[^>]*?\bsrc=")([^"]*)(")"#,
-        options: [.caseInsensitive]
-    )
-
-    private static let supportedMimeTypes = [
-        "png": "image/png",
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "gif": "image/gif",
-        "webp": "image/webp"
-    ]
-
-    private static let supportedImageUTTypes: Set<UTType> = [
-        .png,
-        .jpeg,
-        .gif,
-        .webP
-    ]
-
-    static func rewrite(
-        html: String,
-        baseDirectory: URL,
-        byteLimit: Int = 4 * 1024 * 1024,
-        aggregateByteLimit: Int = 12 * 1024 * 1024
-    ) -> String {
-        let nsHTML = html as NSString
-        let regex = imgSrcRegex
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length))
-        guard !matches.isEmpty else {
-            return html
-        }
-
-        var chunks: [String] = []
-        chunks.reserveCapacity(matches.count * 2 + 1)
-        var cursor = 0
-        var embeddedBytes = 0
-        for match in matches {
-            chunks.append(nsHTML.substring(with: NSRange(location: cursor, length: match.range.location - cursor)))
-            let prefix = nsHTML.substring(with: match.range(at: 1))
-            let source = nsHTML.substring(with: match.range(at: 2))
-            let suffix = nsHTML.substring(with: match.range(at: 3))
-            if let image = dataURI(for: source, baseDirectory: baseDirectory, byteLimit: byteLimit),
-               embeddedBytes + image.byteCount <= aggregateByteLimit {
-                embeddedBytes += image.byteCount
-                chunks.append(prefix)
-                chunks.append(image.uri)
-                chunks.append(suffix)
-            } else {
-                chunks.append(nsHTML.substring(with: match.range))
-            }
-            cursor = match.range.location + match.range.length
-        }
-        chunks.append(nsHTML.substring(from: cursor))
-        return chunks.joined()
-    }
-
-    private static func dataURI(for source: String, baseDirectory: URL, byteLimit: Int) -> (uri: String, byteCount: Int)? {
-        guard let url = resolvedURL(for: source, baseDirectory: baseDirectory) else {
-            return nil
-        }
-        let ext = url.pathExtension.lowercased()
-        guard let mimeType = supportedMimeTypes[ext] else {
-            return nil
-        }
-        guard isRegularFileWithinLimit(url: url, byteLimit: byteLimit) else {
-            return nil
-        }
-        guard let resourceValues = try? url.resourceValues(forKeys: [.contentTypeKey]),
-              let utType = resourceValues.contentType,
-              supportedImageUTTypes.contains(utType) else {
-            return nil
-        }
-        guard let data = try? Data(contentsOf: url), data.count <= byteLimit else {
-            return nil
-        }
-        return ("data:\(mimeType);base64,\(data.base64EncodedString())", data.count)
-    }
-
-    private static func resolvedURL(for source: String, baseDirectory: URL) -> URL? {
-        guard !source.isEmpty, !source.hasPrefix("#"), !source.hasPrefix("/") else {
-            return nil
-        }
-        guard !source.contains(":") else {
-            return nil
-        }
-        let decoded = source.removingPercentEncoding ?? source
-        let baseURL = baseDirectory.resolvingSymlinksInPath().standardizedFileURL
-        let candidate = URL(fileURLWithPath: decoded, relativeTo: baseURL)
-            .resolvingSymlinksInPath()
-            .standardizedFileURL
-        guard isSubpath(candidate.path, of: baseURL.path) else {
-            return nil
-        }
-        return candidate
-    }
-
-    private static func isRegularFileWithinLimit(url: URL, byteLimit: Int) -> Bool {
-        guard
-            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
-            values.isRegularFile == true,
-            let fileSize = values.fileSize,
-            fileSize <= byteLimit
-        else {
-            return false
-        }
-        return true
-    }
-
-    private static func isSubpath(_ childPath: String, of basePath: String) -> Bool {
-        childPath == basePath || childPath.hasPrefix(basePath + "/")
-    }
 }
 
 private final class WebAssetBundleMarker: NSObject {}
 
-private struct WebAssetBundle {
+struct WebAssetBundle {
     let highlightLightCSS: String
     let highlightDarkCSS: String
     let highlightJS: String
@@ -595,18 +505,6 @@ private struct WebAssetBundle {
     let katexJS: String
     let katexAutoRenderJS: String
     let mermaidJS: String
-
-    static func cdnHighlightStyles(isDark: Bool) -> String {
-        """
-        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" integrity="sha256-Oppd74ucMR5a5Dq96FxjEzGF7tTw2fZ/6ksAqDCM8GY=" crossorigin="anonymous" \(isDark ? "disabled" : "")>
-        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" integrity="sha256-nyCNAiECsdDHrr/s2OQsp5l9XeY2ZJ0rMepjCT2AkBk=" crossorigin="anonymous" \(!isDark ? "disabled" : "")>
-        """
-    }
-    static let cdnHighlightScript = #"<script id="hljs-script" src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js" integrity="sha256-xKOZ3W9Ii8l6NUbjR2dHs+cUyZxXuUcxVMb7jSWbk4E=" crossorigin="anonymous"></script>"#
-    static let cdnKatexStyle = #"<link id="katex-style" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" integrity="sha256-94eJG1UNVUwhSqiQLzmsRt8tvUj97FAKIECl3OHoq1g=" crossorigin="anonymous">"#
-    static let cdnKatexScript = #"<script id="katex-script" src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js" integrity="sha256-hjgR4rqghJx3vJLSbUT00KSEPCqKtSxGIBfepXMW5Ng=" crossorigin="anonymous"></script>"#
-    static let cdnKatexAutoRenderScript = #"<script id="katex-auto-render-script" src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js" integrity="sha256-u1PrlTOUUxquNv3VNwZcQkTrhUKQGjzpFGAdkyZ1uKw=" crossorigin="anonymous"></script>"#
-    static let cdnMermaidScript = #"<script id="mermaid-script" src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js" integrity="sha256-cBN+d7snO7LvlyuG6LBADMqL5TyyW/xFkRoYbcmGZd4=" crossorigin="anonymous"></script>"#
 
     private static let bundledAssets = loadFromCandidateResourceRoots(preferred: Bundle(for: WebAssetBundleMarker.self))
 

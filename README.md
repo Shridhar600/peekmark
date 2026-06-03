@@ -42,6 +42,15 @@ It renders GitHub Flavored Markdown (GFM) with rich inline features — LaTeX ma
 
 ---
 
+## Limitations (first public release)
+
+- **No local image rendering.** PeekMark runs inside the macOS App Sandbox. When you open a Markdown file, the app only has read access to that single file, not to sibling images next to it. The preview therefore **does not render** `<img src="photo.png">`, `![alt](photo.png)`, or any other local-relative image reference. The corresponding `<img>` tag is stripped from the preview to avoid a broken-image icon. The supported way to embed an image in Markdown for PeekMark is an **inline raster `data:` URI** in the source — those are self-contained and don't depend on the sandbox. Local image rendering may be reintroduced in a future release via a sandbox-safe mechanism.
+- **No remote image fetching.** For privacy, the preview never fetches `https://` or `http://` images, `data:image/svg+xml,…` payloads, or any other external resource. The strict Content-Security-Policy and the HTML sanitizer together block these. This is intentional: opening a Markdown file must not cause PeekMark to contact a third-party host or leak the document's existence, the user's IP, or local timing.
+- **No video / audio / `<iframe>` rendering.** The Quick Look extension returns HTML data which is rendered by the system, but the renderer is intentionally conservative for the same reason (sandbox, no third-party fetches). A raw HTML `<video>` or `<source>` tag in your Markdown will be sanitized in the same way as image tags.
+- **No notarized `.app` distribution in this release.** The build pipeline produces an ad-hoc signed `.app` intended to be installed from `./script/install.sh` or built locally. There is no signed-and-notarized public binary to download. See `SECURITY.md` for the entitlement audit.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -90,8 +99,12 @@ xcodebuild -project PeekMark.xcodeproj -scheme PeekMark test
 PeekMark is designed with privacy as a core requirement:
 
 - **Sandboxed**: The app runs in Apple's App Sandbox with minimal entitlements. It only accesses files you explicitly open.
-- **Limited Network Requirement Today**: The current renderer loads KaTeX, Mermaid, and Highlight.js assets from pinned CDN URLs with Subresource Integrity. Removing this runtime network dependency is planned before a stricter offline/no-network release.
+- **Fully Vendored Renderer**: The preview loads Highlight.js, KaTeX, and Mermaid from `WebAssets/` bundled inside the app and extension. There are no CDN fallbacks. The strict Content-Security-Policy (`default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; connect-src 'none'`) blocks every form of remote script, style, font, XHR, and WebSocket fetch.
+- **Unavoidable Network Entitlement**: The host app declares `com.apple.security.network.client` because `WKWebView`'s separate `WebContent` rendering subprocess requires that entitlement in order to launch on macOS 15+. Without it, the WKWebView shows a blank page silently. The host process never opens a network socket; only the renderer subprocess is granted the capability, and the strict CSP above prevents it from making any network request at all. Removing this entitlement will break the preview.
+- **Remote Images Stripped**: `<img src="https://...">`, `<img src="http://...">`, `<img src="data:image/svg+xml,...">`, and remote stylesheets/links in raw HTML are stripped by `HTMLSanitizer` to avoid leaking the fact that a document was opened, the user's IP, or local timing to third-party hosts. See the "Limitations" section above for the rationale.
+- **Local Images Also Stripped (first public release)**: Because PeekMark opens individual Markdown files under macOS sandboxing, the app may not have permission to read sibling image files. The corresponding `<img>` tags are stripped from the preview to avoid a broken-image icon. Inline raster `data:` URIs in the source Markdown are self-contained and are preserved.
 - **No Tracking**: No analytics, telemetry, or crash reporting. No data collection of any kind.
+- **User-initiated link clicks**: Clicking a link in the preview opens the URL in your default browser via macOS. PeekMark does not contact third-party hosts on its own, but a user-initiated click on a Markdown link is routed through the OS to your default browser, just as if you had typed the URL yourself.
 - **Local Processing**: All Markdown parsing and rendering happens on-device. Your files never leave your machine.
 - **Open Source**: Full source available for review. Built entirely with Swift and open-source libraries.
 
