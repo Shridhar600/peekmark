@@ -41,6 +41,15 @@ struct MarkdownPreviewView: NSViewRepresentable {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.websiteDataStore = .nonPersistent()
         configuration.suppressesIncrementalRendering = false
+        // NOTE: WKWebView renders pages in a separate `WebContent` subprocess that
+        // requires the host app to declare `com.apple.security.network.client` in
+        // order to even launch on macOS 15+. The renderer never actually makes a
+        // network request — the strict Content-Security-Policy in
+        // `MarkdownRenderer.documentHTML` blocks every form of remote fetch — but
+        // the entitlement itself cannot be removed without the WebContent process
+        // crashing on launch, which silently blanks the preview. See
+        // `App/PeekMark.entitlements` and `README.md` "Trust & Privacy" for the
+        // full rationale.
 
         // Register the script message handler for copying code
         let contentController = WKUserContentController()

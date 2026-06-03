@@ -13,7 +13,6 @@ tags:
   - ui
 category: testing-suite
 draft: false
-cover: ./assets/cover.png
 ---
 
 # 📑 Welcome to PeekMark
@@ -380,17 +379,23 @@ pie title Markdown Features
 
 ## Images
 
-![Placeholder Image](https://picsum.photos/800/300)
+The first public release of PeekMark intentionally does not render images.
 
-## Linked Image
+- **Remote images** (e.g. `![alt](https://example.com/x.png)`) are stripped from
+  the preview for privacy — opening a Markdown file must not cause PeekMark
+  to contact a third-party host.
+- **Local relative images** (e.g. `![alt](photo.png)` next to the Markdown
+  file) are also not rendered. PeekMark runs inside the macOS App Sandbox
+  and only has read access to the file the user explicitly opened, so it
+  cannot read sibling image files in the same directory. The corresponding
+  `<img>` tag is stripped from the preview to avoid a broken-image icon.
+- **Inline raster data URIs** are self-contained and are preserved by the
+  renderer. This is the supported way to embed an image in Markdown intended
+  for PeekMark. The 16×16 blue image below is a real, renderable example:
 
-[![OpenAI](https://picsum.photos/300/100)](https://openai.com)
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAG0lEQVR4nGP4TyJgAGKDBGLRqIZRDQOtgSQAAOI/5Nhj/YMPAAAAAElFTkSuQmCC" alt="inline raster data URI" width="16" height="16">
 
-## Video Embed HTML
-
-<video controls width="400">
-  <source src="sample.mp4" type="video/mp4">
-</video>
+See the README "Limitations" section for details.
 
 ---
 
@@ -509,7 +514,7 @@ ___
 - [ ] Syntax highlighting
 - [ ] Inline code styling
 - [ ] Table overflow
-- [ ] Image loading
+- [ ] Inline raster data URI preserved
 - [ ] HTML sanitization
 - [ ] Mermaid rendering
 - [ ] LaTeX rendering
