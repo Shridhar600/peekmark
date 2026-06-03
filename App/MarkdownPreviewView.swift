@@ -166,8 +166,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
                         
                         var lightStyle = document.getElementById('hljs-light');
                         var darkStyle = document.getElementById('hljs-dark');
-                        if (lightStyle) { lightStyle.disabled = isDark; }
-                        if (darkStyle) { darkStyle.disabled = !isDark; }
+                        if (lightStyle) { lightStyle.media = isDark ? 'not all' : 'all'; }
+                        if (darkStyle) { darkStyle.media = isDark ? 'all' : 'not all'; }
                         
                         if (window.mermaid) {
                             window.mermaid.initialize({
@@ -283,8 +283,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 
                 var lightStyle = document.getElementById('hljs-light');
                 var darkStyle = document.getElementById('hljs-dark');
-                if (lightStyle) { lightStyle.disabled = isDark; }
-                if (darkStyle) { darkStyle.disabled = !isDark; }
+                if (lightStyle) { lightStyle.media = isDark ? 'not all' : 'all'; }
+                if (darkStyle) { darkStyle.media = isDark ? 'all' : 'not all'; }
                 
                 if (window.mermaid) {
                     window.mermaid.initialize({

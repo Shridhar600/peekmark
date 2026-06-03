@@ -684,8 +684,8 @@ private struct WebAssetBundle {
 
     func highlightStyles(isDark: Bool) -> String {
         """
-        \(styleTag(id: "hljs-light", css: highlightLightCSS, disabled: isDark))
-        \(styleTag(id: "hljs-dark", css: highlightDarkCSS, disabled: !isDark))
+        \(styleTag(id: "hljs-light", css: highlightLightCSS, media: isDark ? "not all" : "all"))
+        \(styleTag(id: "hljs-dark", css: highlightDarkCSS, media: isDark ? "all" : "not all"))
         """
     }
 
@@ -697,8 +697,8 @@ private struct WebAssetBundle {
         #"<script id="\#(id)">\#(Self.escapeScript(self[keyPath: source]))</script>"#
     }
 
-    private func styleTag(id: String, css: String, disabled: Bool = false) -> String {
-        #"<style id="\#(id)"\#(disabled ? " disabled" : "")>\#(Self.escapeStyle(css))</style>"#
+    private func styleTag(id: String, css: String, media: String = "all") -> String {
+        #"<style id="\#(id)" media="\#(media)">\#(Self.escapeStyle(css))</style>"#
     }
 
     private static func read(_ relativePath: String, resourceRoot: URL) -> String? {
