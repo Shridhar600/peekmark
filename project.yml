@@ -19,6 +19,9 @@ targets:
       - path: App
       - path: Shared
       - path: Assets/Assets.xcassets
+      - path: WebAssets
+        type: folder
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: App/Info.plist
@@ -38,6 +41,9 @@ targets:
     sources:
       - path: Extension
       - path: Shared
+      - path: WebAssets
+        type: folder
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: Extension/Info.plist
@@ -55,6 +61,9 @@ targets:
     sources:
       - path: Tests
       - path: Shared
+      - path: WebAssets
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.peekmark.tests

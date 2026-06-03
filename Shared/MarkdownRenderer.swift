@@ -217,17 +217,20 @@ enum MarkdownRenderer {
         isTransparent: Bool
     ) -> String {
         let isDark = appearance == .dark
-        let highlightCSSLink = """
-        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" integrity="sha256-Oppd74ucMR5a5Dq96FxjEzGF7tTw2fZ/6ksAqDCM8GY=" crossorigin="anonymous" \(isDark ? "disabled" : "")>
-        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" integrity="sha256-nyCNAiECsdDHrr/s2OQsp5l9XeY2ZJ0rMepjCT2AkBk=" crossorigin="anonymous" \(!isDark ? "disabled" : "")>
-        """
+        let webAssets = WebAssetBundle.load()
+        let highlightCSSLink = webAssets?.highlightStyles(isDark: isDark) ?? WebAssetBundle.cdnHighlightStyles(isDark: isDark)
+        let highlightScript = webAssets?.scriptTag(id: "hljs-script", source: \.highlightJS) ?? WebAssetBundle.cdnHighlightScript
+        let katexCSS = webAssets?.styleTag(id: "katex-style", source: \.katexCSS) ?? WebAssetBundle.cdnKatexStyle
+        let katexScript = webAssets?.scriptTag(id: "katex-script", source: \.katexJS) ?? WebAssetBundle.cdnKatexScript
+        let katexAutoRenderScript = webAssets?.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS) ?? WebAssetBundle.cdnKatexAutoRenderScript
+        let mermaidScript = webAssets?.scriptTag(id: "mermaid-script", source: \.mermaidJS) ?? WebAssetBundle.cdnMermaidScript
 
         return """
         <!doctype html>
         <html data-appearance="\(appearance.rawValue)">
         <head>
           <meta charset="utf-8">
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self';">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src data: https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self';">
           <script>
             // Mock matchMedia to match resolved appearance
             (function() {
@@ -284,12 +287,12 @@ enum MarkdownRenderer {
           
           <!-- Highlight.js for Syntax Highlighting -->
           \(highlightCSSLink)
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js" integrity="sha256-xKOZ3W9Ii8l6NUbjR2dHs+cUyZxXuUcxVMb7jSWbk4E=" crossorigin="anonymous"></script>
+          \(highlightScript)
           
           <!-- KaTeX for LaTeX Render -->
-          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" integrity="sha256-94eJG1UNVUwhSqiQLzmsRt8tvUj97FAKIECl3OHoq1g=" crossorigin="anonymous">
-          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js" integrity="sha256-hjgR4rqghJx3vJLSbUT00KSEPCqKtSxGIBfepXMW5Ng=" crossorigin="anonymous"></script>
-          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js" integrity="sha256-u1PrlTOUUxquNv3VNwZcQkTrhUKQGjzpFGAdkyZ1uKw=" crossorigin="anonymous"></script>
+          \(katexCSS)
+          \(katexScript)
+          \(katexAutoRenderScript)
 
           <style>
         \(PeekMarkTheme.css(for: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent))
@@ -427,7 +430,7 @@ enum MarkdownRenderer {
             });
           </script>
           <!-- Load Mermaid (IIFE version for better CSP compatibility) -->
-          <script src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js" integrity="sha256-cBN+d7snO7LvlyuG6LBADMqL5TyyW/xFkRoYbcmGZd4=" crossorigin="anonymous"></script>
+          \(mermaidScript)
           <script>
             (function() {
               var appearance = document.documentElement.getAttribute('data-appearance') || 'light';
@@ -579,5 +582,159 @@ private enum LocalImageDataURIRewriter {
 
     private static func isSubpath(_ childPath: String, of basePath: String) -> Bool {
         childPath == basePath || childPath.hasPrefix(basePath + "/")
+    }
+}
+
+private final class WebAssetBundleMarker: NSObject {}
+
+private struct WebAssetBundle {
+    let highlightLightCSS: String
+    let highlightDarkCSS: String
+    let highlightJS: String
+    let katexCSS: String
+    let katexJS: String
+    let katexAutoRenderJS: String
+    let mermaidJS: String
+
+    static func cdnHighlightStyles(isDark: Bool) -> String {
+        """
+        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" integrity="sha256-Oppd74ucMR5a5Dq96FxjEzGF7tTw2fZ/6ksAqDCM8GY=" crossorigin="anonymous" \(isDark ? "disabled" : "")>
+        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" integrity="sha256-nyCNAiECsdDHrr/s2OQsp5l9XeY2ZJ0rMepjCT2AkBk=" crossorigin="anonymous" \(!isDark ? "disabled" : "")>
+        """
+    }
+    static let cdnHighlightScript = #"<script id="hljs-script" src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js" integrity="sha256-xKOZ3W9Ii8l6NUbjR2dHs+cUyZxXuUcxVMb7jSWbk4E=" crossorigin="anonymous"></script>"#
+    static let cdnKatexStyle = #"<link id="katex-style" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" integrity="sha256-94eJG1UNVUwhSqiQLzmsRt8tvUj97FAKIECl3OHoq1g=" crossorigin="anonymous">"#
+    static let cdnKatexScript = #"<script id="katex-script" src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js" integrity="sha256-hjgR4rqghJx3vJLSbUT00KSEPCqKtSxGIBfepXMW5Ng=" crossorigin="anonymous"></script>"#
+    static let cdnKatexAutoRenderScript = #"<script id="katex-auto-render-script" src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js" integrity="sha256-u1PrlTOUUxquNv3VNwZcQkTrhUKQGjzpFGAdkyZ1uKw=" crossorigin="anonymous"></script>"#
+    static let cdnMermaidScript = #"<script id="mermaid-script" src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js" integrity="sha256-cBN+d7snO7LvlyuG6LBADMqL5TyyW/xFkRoYbcmGZd4=" crossorigin="anonymous"></script>"#
+
+    private static let bundledAssets = loadFromCandidateResourceRoots(preferred: Bundle(for: WebAssetBundleMarker.self))
+
+    static func load(bundle: Bundle = .main) -> WebAssetBundle? {
+        if bundle.bundleURL != Bundle.main.bundleURL,
+           let assets = loadUncached(bundle: bundle) {
+            return assets
+        }
+
+        return bundledAssets
+    }
+
+    private static func loadUncached(bundle: Bundle) -> WebAssetBundle? {
+        guard let resourceURL = bundle.resourceURL else {
+            return nil
+        }
+        return loadUncached(resourceRoot: resourceURL)
+    }
+
+    private static func loadUncached(resourceRoot: URL) -> WebAssetBundle? {
+        guard
+            let highlightLightCSS = read("highlight/github.min.css", resourceRoot: resourceRoot),
+            let highlightDarkCSS = read("highlight/github-dark.min.css", resourceRoot: resourceRoot),
+            let highlightJS = read("highlight/highlight.min.js", resourceRoot: resourceRoot),
+            let katexCSS = readKatexCSS(resourceRoot: resourceRoot),
+            let katexJS = read("katex/js/katex.min.js", resourceRoot: resourceRoot),
+            let katexAutoRenderJS = read("katex/js/auto-render.min.js", resourceRoot: resourceRoot),
+            let mermaidJS = read("mermaid/mermaid.min.js", resourceRoot: resourceRoot)
+        else {
+            return nil
+        }
+
+        return WebAssetBundle(
+            highlightLightCSS: highlightLightCSS,
+            highlightDarkCSS: highlightDarkCSS,
+            highlightJS: highlightJS,
+            katexCSS: katexCSS,
+            katexJS: katexJS,
+            katexAutoRenderJS: katexAutoRenderJS,
+            mermaidJS: mermaidJS
+        )
+    }
+
+    private static func loadFromCandidateResourceRoots(preferred: Bundle) -> WebAssetBundle? {
+        for resourceRoot in candidateResourceRoots(preferred: preferred) {
+            if let assets = loadUncached(resourceRoot: resourceRoot) {
+                return assets
+            }
+        }
+        return nil
+    }
+
+    private static func candidateResourceRoots(preferred: Bundle) -> [URL] {
+        var candidates: [URL] = []
+        var seen = Set<URL>()
+
+        func append(_ url: URL?) {
+            guard let url else {
+                return
+            }
+            let standardized = url.standardizedFileURL
+            guard seen.insert(standardized).inserted else {
+                return
+            }
+            candidates.append(standardized)
+        }
+
+        for bundle in [preferred, Bundle.main] {
+            append(bundle.resourceURL)
+            append(bundle.bundleURL.appendingPathComponent("Contents/Resources", isDirectory: true))
+        }
+
+        return candidates
+    }
+
+    func highlightStyles(isDark: Bool) -> String {
+        """
+        \(styleTag(id: "hljs-light", css: highlightLightCSS, disabled: isDark))
+        \(styleTag(id: "hljs-dark", css: highlightDarkCSS, disabled: !isDark))
+        """
+    }
+
+    func styleTag(id: String, source: KeyPath<WebAssetBundle, String>) -> String {
+        styleTag(id: id, css: self[keyPath: source])
+    }
+
+    func scriptTag(id: String, source: KeyPath<WebAssetBundle, String>) -> String {
+        #"<script id="\#(id)">\#(Self.escapeScript(self[keyPath: source]))</script>"#
+    }
+
+    private func styleTag(id: String, css: String, disabled: Bool = false) -> String {
+        #"<style id="\#(id)"\#(disabled ? " disabled" : "")>\#(Self.escapeStyle(css))</style>"#
+    }
+
+    private static func read(_ relativePath: String, resourceRoot: URL) -> String? {
+        let url = resourceRoot
+            .appendingPathComponent("WebAssets", isDirectory: true)
+            .appendingPathComponent(relativePath)
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    private static func readData(_ relativePath: String, resourceRoot: URL) -> Data? {
+        let url = resourceRoot
+            .appendingPathComponent("WebAssets", isDirectory: true)
+            .appendingPathComponent(relativePath)
+        return try? Data(contentsOf: url)
+    }
+
+    private static func readKatexCSS(resourceRoot: URL) -> String? {
+        guard var css = read("katex/css/katex.min.css", resourceRoot: resourceRoot) else {
+            return nil
+        }
+
+        for fontPath in Set(css.matches(of: /fonts\/[^)]*\.woff2/).map { String($0.output) }) {
+            guard let fontData = readData("katex/\(fontPath)", resourceRoot: resourceRoot) else {
+                return nil
+            }
+            let dataURL = "data:font/woff2;base64,\(fontData.base64EncodedString())"
+            css = css.replacingOccurrences(of: "url(\(fontPath))", with: "url(\(dataURL))")
+        }
+        return css
+    }
+
+    private static func escapeScript(_ script: String) -> String {
+        script.replacingOccurrences(of: "</script", with: "<\\/script", options: [.caseInsensitive])
+    }
+
+    private static func escapeStyle(_ style: String) -> String {
+        style.replacingOccurrences(of: "</style", with: "<\\/style", options: [.caseInsensitive])
     }
 }

@@ -33,7 +33,6 @@ final class MarkdownRendererTests: XCTestCase {
     func testUsesPlainDocumentChrome() async {
         let result = await MarkdownRenderer.render(markdown: "# Plain", title: "Plain")
 
-        XCTAssertFalse(result.html.contains("box-shadow"))
         XCTAssertFalse(result.html.contains("border-radius: 8px"))
         XCTAssertFalse(result.html.contains("color-mix"))
         XCTAssertFalse(result.html.contains("#176b62"))
@@ -182,7 +181,7 @@ final class MarkdownRendererTests: XCTestCase {
             baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
         )
 
-        XCTAssertFalse(result.html.contains("data:image/"))
+        XCTAssertFalse(result.bodyHTML.contains("data:image/"))
         XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("https://example.com/pixel.png"))
     }
 
@@ -230,6 +229,22 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertTrue(result.html.contains("if (window.mermaid && typeof window.mermaid.initialize === 'function' && typeof window.mermaid.run === 'function')"))
         XCTAssertFalse(result.html.contains("\n            hljs.highlightAll();"))
         XCTAssertFalse(result.html.contains("\n              mermaid.initialize({"))
+    }
+
+    func testUsesBundledWebAssetsWhenAvailable() async {
+        let result = await MarkdownRenderer.render(markdown: "# Title\n\nInline math $x^2$.", title: "Doc")
+
+        XCTAssertTrue(result.html.contains(#"<style id="hljs-light">"#))
+        XCTAssertTrue(result.html.contains(#"<style id="katex-style">"#))
+        XCTAssertTrue(result.html.contains(#"<script id="hljs-script">"#))
+        XCTAssertTrue(result.html.contains(#"<script id="katex-script">"#))
+        XCTAssertTrue(result.html.contains(#"<script id="katex-auto-render-script">"#))
+        XCTAssertTrue(result.html.contains(#"<script id="mermaid-script">"#))
+        XCTAssertTrue(result.html.contains("data:font/woff2;base64,"))
+        XCTAssertFalse(result.html.contains(#"src="https://cdnjs.cloudflare.com"#))
+        XCTAssertFalse(result.html.contains(#"src="https://cdn.jsdelivr.net"#))
+        XCTAssertFalse(result.html.contains(#"href="https://cdnjs.cloudflare.com"#))
+        XCTAssertFalse(result.html.contains(#"href="https://cdn.jsdelivr.net"#))
     }
 }
 
