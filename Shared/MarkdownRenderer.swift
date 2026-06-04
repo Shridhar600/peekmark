@@ -82,27 +82,27 @@ enum MarkdownRenderer {
     }
 
     static func renderBody(markdown: String, baseURL: URL? = nil) -> (bodyHTML: String, headings: [HeadingItem]) {
-        let (processedMarkdown, footnotesHTML) = processFootnotes(markdown)
-        let document = Document(parsing: processedMarkdown)
         // `baseURL` is accepted but currently unused for local image embedding
         // — PeekMark is sandboxed and intentionally does not read sibling image
         // files in the first public release. See README "Limitations".
         _ = baseURL
+        return renderBodySync(markdown: markdown)
+    }
+
+    private static func renderBodySync(markdown: String) -> (bodyHTML: String, headings: [HeadingItem]) {
+        let (processedMarkdown, footnotesHTML) = processFootnotes(markdown)
+        let document = Document(parsing: processedMarkdown)
         let body = HTMLSanitizer.sanitizeGeneratedHTML(HTMLFormatter.format(document))
         let headings = HeadingExtractor.extract(from: document)
         return (body + footnotesHTML, headings)
     }
 
     static func renderBodyAsync(markdown: String, baseURL: URL? = nil) async -> (bodyHTML: String, headings: [HeadingItem]) {
-        let (processedMarkdown, footnotesHTML) = processFootnotes(markdown)
-        let document = Document(parsing: processedMarkdown)
         // `baseURL` is accepted but currently unused for local image embedding
         // — PeekMark is sandboxed and intentionally does not read sibling image
         // files in the first public release. See README "Limitations".
         _ = baseURL
-        let body = HTMLSanitizer.sanitizeGeneratedHTML(HTMLFormatter.format(document))
-        let headings = HeadingExtractor.extract(from: document)
-        return (body + footnotesHTML, headings)
+        return renderBodySync(markdown: markdown)
     }
 
     private static func processFootnotes(_ markdown: String) -> (processedMarkdown: String, footnotesHTML: String) {
@@ -226,6 +226,10 @@ enum MarkdownRenderer {
         )
     }
 
+    /// Test seam: accepts an explicit `WebAssetBundle?` value so tests can
+    /// exercise the asset-present and asset-missing code paths without
+    /// depending on `WebAssetBundle.load()` static state. App/Extension
+    /// code should use the private overload (which calls `load()`) instead.
     internal static func documentHTML(
         title: String,
         body: String,
