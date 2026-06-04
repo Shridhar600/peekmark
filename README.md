@@ -1,7 +1,7 @@
 # PeekMark
 
 <p align="center">
-  <img src="Assets/favicon.svg" width="96" alt="PeekMark logo">
+  <img src="Assets/peekmark-icon.png" width="96" alt="PeekMark logo">
   <br>
   <b>A premium, native macOS Markdown reader and Finder Quick Look previewer.</b>
   <br><br>
