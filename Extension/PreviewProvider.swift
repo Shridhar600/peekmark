@@ -44,7 +44,7 @@ final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
             }
 
             let html = result.html
-            let reply = QLPreviewReply(dataOfContentType: .html, contentSize: CGSize(width: 900, height: 1200)) { _ in
+            let reply = QLPreviewReply(dataOfContentType: .html, contentSize: CGSize(width: 675, height: 1200)) { _ in
                 guard let data = html.data(using: .utf8) else {
                     throw PeekMarkError.htmlEncodingFailed
                 }
