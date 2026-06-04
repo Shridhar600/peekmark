@@ -1,5 +1,7 @@
 {
-  "fill" : "automatic",
+  "fill" : {
+    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+  },
   "groups" : [
     {
       "layers" : [
@@ -8,8 +10,8 @@
           "fill" : "automatic",
           "glass" : true,
           "hidden" : false,
-          "image-name" : "peekmarkicon.png",
-          "name" : "peekmarkicon"
+          "image-name" : "peekmarkicon2.png",
+          "name" : "peekmarkicon2"
         }
       ],
       "shadow" : {
