@@ -111,7 +111,7 @@ enum PeekMarkTheme {
     static func css(
         for appearance: MarkdownAppearance = .system,
         font: PreviewFont = .system,
-        fontSize: Double = 14.5,
+        fontSize: Double = 12,
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
     ) -> String {
