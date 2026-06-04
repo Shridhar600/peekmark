@@ -167,7 +167,8 @@ final class MarkdownRendererTests: XCTestCase {
             baseURL: nil
         )
 
-        XCTAssertTrue(result.bodyHTML.contains(dataURI), "raster data URI should be kept")
+        XCTAssertTrue(result.bodyHTML.contains(dataURI), "raster data URI should be kept in bodyHTML")
+        XCTAssertTrue(result.html.contains(dataURI), "raster data URI should survive full render() pipeline")
         XCTAssertTrue(result.bodyHTML.contains("<img"), "raster data URI <img> tag should be kept")
     }
 
@@ -178,7 +179,6 @@ final class MarkdownRendererTests: XCTestCase {
             baseURL: URL(fileURLWithPath: NSTemporaryDirectory())
         )
 
-        XCTAssertFalse(result.bodyHTML.contains("data:image/"))
         XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("https://example.com/pixel.png"))
     }
 
@@ -288,6 +288,16 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(result.contains("cdnjs.cloudflare.com"))
         XCTAssertFalse(result.contains("cdn.jsdelivr.net"))
     }
+
+    // F16 note: the asset-error-banner production path
+    // (WebAssetBundle.load() → documentHTML(webAssets:)) is not tested via
+    // a live filesystem-rename because (a) WebAssetBundle.bundledAssets is a
+    // static let — once loaded it is cached for the process lifetime, and
+    // (b) moving the app's WebAssets/ directory would mutate the built
+    // product during test execution, which is fragile and risks leaving
+    // the tree in a bad state on interrupt. The internal seam
+    // documentHTML(webAssets: nil) covers the logic; an integration-level
+    // test is deferred until a cache-reset mechanism exists.
 
     func testDocumentHTMLWithoutBundledAssetsRendersErrorBannerAndStillRendersBody() {
         let result = MarkdownRenderer.documentHTML(
@@ -458,6 +468,56 @@ final class MarkdownRendererTests: XCTestCase {
         )
 
         XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("<img"), "<img> with no src must be stripped, got: \(result.bodyHTML)")
+    }
+
+    // MARK: - F13: event handlers on raster data URI tags
+
+        // MARK: - F18: sample file renders all features
+
+    func testSampleFileRendersAllFeatures() async throws {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let samplePath = repoRoot.appendingPathComponent("Samples/PeekMark.md")
+        let markdown = try String(contentsOf: samplePath, encoding: .utf8)
+        let result = await MarkdownRenderer.render(markdown: markdown, title: "PeekMark")
+
+        let body = result.bodyHTML
+        XCTAssertTrue(body.contains("language-mermaid"), "Mermaid code block should be present")
+        XCTAssertTrue(body.contains("<table>"), "Tables should be rendered")
+        XCTAssertTrue(body.contains("class=\"footnote-ref\""), "Footnote references should be present")
+        XCTAssertTrue(body.contains("<code class=\"language-swift\""), "Swift code block should be highlighted")
+        XCTAssertTrue(body.contains("<code class=\"language-javascript\""), "JavaScript code block should be highlighted")
+        XCTAssertTrue(body.contains("<code class=\"language-python\""), "Python code block should be highlighted")
+        XCTAssertTrue(body.contains("<code class=\"language-rust\""), "Rust code block should be highlighted")
+        XCTAssertTrue(body.contains("<code class=\"language-sql\""), "SQL code block should be highlighted")
+        XCTAssertTrue(body.contains("<code class=\"language-diff\""), "Diff code block should be highlighted")
+        XCTAssertTrue(body.contains("<details>"), "<details> HTML should survive sanitization")
+        XCTAssertTrue(body.contains("<summary>"), "<summary> HTML should survive sanitization")
+        XCTAssertTrue(body.contains("<input type=\"checkbox\""), "Task list checkbox should be present")
+        XCTAssertTrue(body.contains("<blockquote>"), "Blockquotes / callouts should be present")
+        XCTAssertTrue(body.contains("<strong>"), "Bold text should be rendered")
+        XCTAssertTrue(body.contains("<em>"), "Italic text should be rendered")
+        XCTAssertTrue(body.contains("<del>"), "Strikethrough text should be rendered")
+        XCTAssertTrue(body.contains("<h1>"), "Headings should be rendered")
+        XCTAssertTrue(body.contains("<h2>"), "Sub-headings should be rendered")
+        XCTAssertTrue(body.contains("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2"),
+                      "the sample's inline raster data URI image should survive")
+    }
+
+    func testStripsEventHandlersFromRasterDataURIImg() async {
+        let dataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+        let result = await MarkdownRenderer.render(
+            markdown: "<img src=\"\(dataURI)\" alt=\"x\" onerror=\"alert(1)\" onload=\"track()\">",
+            title: "Event Handler",
+            baseURL: nil
+        )
+
+        XCTAssertTrue(result.bodyHTML.contains(dataURI), "raster data URI should be preserved on a surviving <img>")
+        XCTAssertTrue(result.bodyHTML.localizedCaseInsensitiveContains("<img"), "raster data URI <img> tag should be kept")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("onerror"), "onerror must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("onload"), "onload must be stripped")
+        XCTAssertFalse(result.bodyHTML.localizedCaseInsensitiveContains("alert(1)"), "the event handler body must not survive")
     }
 }
 

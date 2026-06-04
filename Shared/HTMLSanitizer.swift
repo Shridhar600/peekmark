@@ -98,7 +98,7 @@ enum HTMLSanitizer {
     // paths (which we strip via the negative lookahead).
     private static let localImgTagRegex: NSRegularExpression? = {
         try? NSRegularExpression(
-            pattern: #"(?is)<img\b[^>]*?\bsrc\s*=\s*(?!\s*(?:"|')?data:image/(?:png|jpe?g|gif|webp);)[^>]*>"#,
+            pattern: #"(?is)<img\b[^>]*?\s+src\s*=\s*(?!\s*(?:"|')?data:image/(?:png|jpe?g|gif|webp);)[^>]*>"#,
             options: []
         )
     }()
