@@ -5,11 +5,12 @@ set -euo pipefail
 MODE="${1:-run}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DERIVED_DATA_DIR="$ROOT_DIR/.build/DerivedData"
+CONFIGURATION="${CONFIGURATION:-Debug}"
 APP_NAME="PeekMark.app"
-APP_PATH="$DERIVED_DATA_DIR/Build/Products/Debug/$APP_NAME"
+APP_PATH="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION/$APP_NAME"
 PROCESS_NAME="PeekMark"
 
-export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+
 
 if pgrep -x "$PROCESS_NAME" >/dev/null 2>&1; then
   pkill -x "$PROCESS_NAME"
@@ -20,7 +21,7 @@ xcodegen --project "$ROOT_DIR"
 xcodebuild \
   -project "$ROOT_DIR/PeekMark.xcodeproj" \
   -scheme "PeekMark" \
-  -configuration Debug \
+  -configuration "$CONFIGURATION" \
   -derivedDataPath "$DERIVED_DATA_DIR" \
   build
 

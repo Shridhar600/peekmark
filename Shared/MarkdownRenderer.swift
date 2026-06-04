@@ -22,9 +22,11 @@ enum MarkdownRenderer {
         fontSize: Double = 14.5,
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
-    ) -> MarkdownRenderResult {
+    ) async -> MarkdownRenderResult {
         let (metadata, content) = parseFrontMatter(markdown)
-        let (bodyHTML, headings) = renderBody(markdown: content, baseURL: baseURL)
+
+        let (bodyHTML, headings) = await renderBodyAsync(markdown: content, baseURL: baseURL)
+
         return wrapHTML(title: title, bodyHTML: bodyHTML, metadata: metadata, headings: headings, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent)
     }
 
@@ -80,12 +82,27 @@ enum MarkdownRenderer {
     }
 
     static func renderBody(markdown: String, baseURL: URL? = nil) -> (bodyHTML: String, headings: [HeadingItem]) {
+        // `baseURL` is accepted but currently unused for local image embedding
+        // — PeekMark is sandboxed and intentionally does not read sibling image
+        // files in the first public release. See README "Limitations".
+        _ = baseURL
+        return renderBodySync(markdown: markdown)
+    }
+
+    private static func renderBodySync(markdown: String) -> (bodyHTML: String, headings: [HeadingItem]) {
         let (processedMarkdown, footnotesHTML) = processFootnotes(markdown)
         let document = Document(parsing: processedMarkdown)
         let body = HTMLSanitizer.sanitizeGeneratedHTML(HTMLFormatter.format(document))
-        let bodyWithImages = embedLocalImages(in: body, baseURL: baseURL)
         let headings = HeadingExtractor.extract(from: document)
-        return (bodyWithImages + footnotesHTML, headings)
+        return (body + footnotesHTML, headings)
+    }
+
+    static func renderBodyAsync(markdown: String, baseURL: URL? = nil) async -> (bodyHTML: String, headings: [HeadingItem]) {
+        // `baseURL` is accepted but currently unused for local image embedding
+        // — PeekMark is sandboxed and intentionally does not read sibling image
+        // files in the first public release. See README "Limitations".
+        _ = baseURL
+        return renderBodySync(markdown: markdown)
     }
 
     private static func processFootnotes(_ markdown: String) -> (processedMarkdown: String, footnotesHTML: String) {
@@ -152,7 +169,8 @@ enum MarkdownRenderer {
         for footnote in footnotes {
             let contentDoc = Document(parsing: footnote.content)
             var contentHTML = HTMLFormatter.format(contentDoc)
-            
+            contentHTML = HTMLSanitizer.sanitizeGeneratedHTML(contentHTML)
+
             if contentHTML.hasPrefix("<p>") && contentHTML.hasSuffix("</p>\n") {
                 contentHTML = String(contentHTML.dropFirst(3).dropLast(5))
             } else if contentHTML.hasPrefix("<p>") && contentHTML.hasSuffix("</p>") {
@@ -196,18 +214,67 @@ enum MarkdownRenderer {
         spacing: PreviewSpacing,
         isTransparent: Bool
     ) -> String {
+        return documentHTML(
+            title: title,
+            body: body,
+            appearance: appearance,
+            font: font,
+            fontSize: fontSize,
+            spacing: spacing,
+            isTransparent: isTransparent,
+            webAssets: WebAssetBundle.load()
+        )
+    }
+
+    /// Test seam: accepts an explicit `WebAssetBundle?` value so tests can
+    /// exercise the asset-present and asset-missing code paths without
+    /// depending on `WebAssetBundle.load()` static state. App/Extension
+    /// code should use the private overload (which calls `load()`) instead.
+    internal static func documentHTML(
+        title: String,
+        body: String,
+        appearance: MarkdownAppearance,
+        font: PreviewFont,
+        fontSize: Double,
+        spacing: PreviewSpacing,
+        isTransparent: Bool,
+        webAssets: WebAssetBundle?
+    ) -> String {
         let isDark = appearance == .dark
-        let highlightCSSLink = """
-        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"\(isDark ? " disabled" : "")>
-        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"\(!isDark ? " disabled" : "")>
-        """
+        let highlightCSSLink: String
+        let highlightScript: String
+        let katexCSS: String
+        let katexScript: String
+        let katexAutoRenderScript: String
+        let mermaidScript: String
+        let assetErrorBanner: String?
+
+        if let webAssets {
+            highlightCSSLink = webAssets.highlightStyles(isDark: isDark)
+            highlightScript = webAssets.scriptTag(id: "hljs-script", source: \.highlightJS)
+            katexCSS = webAssets.styleTag(id: "katex-style", source: \.katexCSS)
+            katexScript = webAssets.scriptTag(id: "katex-script", source: \.katexJS)
+            katexAutoRenderScript = webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS)
+            mermaidScript = webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS)
+            assetErrorBanner = nil
+        } else {
+            highlightCSSLink = ""
+            highlightScript = ""
+            katexCSS = ""
+            katexScript = ""
+            katexAutoRenderScript = ""
+            mermaidScript = ""
+            assetErrorBanner = """
+            <div class="peekmark-asset-error" style="background:#fff4cc;color:#5a4500;border:1px solid #e0c44a;padding:12px 16px;margin:0 0 16px 0;font:14px -apple-system,system-ui,sans-serif;border-radius:6px;">PeekMark failed to load bundled web assets. Code highlighting, math, and diagrams are disabled in this preview.</div>
+            """
+        }
 
         return """
         <!doctype html>
         <html data-appearance="\(appearance.rawValue)">
         <head>
           <meta charset="utf-8">
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; img-src 'self' data:;">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; connect-src 'none';">
           <script>
             // Mock matchMedia to match resolved appearance
             (function() {
@@ -264,12 +331,12 @@ enum MarkdownRenderer {
           
           <!-- Highlight.js for Syntax Highlighting -->
           \(highlightCSSLink)
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+          \(highlightScript)
           
           <!-- KaTeX for LaTeX Render -->
-          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+          \(katexCSS)
+          \(katexScript)
+          \(katexAutoRenderScript)
 
           <style>
         \(PeekMarkTheme.css(for: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent))
@@ -302,6 +369,7 @@ enum MarkdownRenderer {
         </head>
         <body>
           <main>
+        \(assetErrorBanner ?? "")
         \(body)
           </main>
 
@@ -343,19 +411,22 @@ enum MarkdownRenderer {
                 pre.parentNode.replaceChild(div, pre);
             });
 
-            // Run Highlight.js
-            hljs.highlightAll();
+            // Run optional vendor enhancements only when their assets loaded.
+            if (window.hljs && typeof window.hljs.highlightAll === 'function') {
+                window.hljs.highlightAll();
+            }
 
-            // Run KaTeX auto-render
-            renderMathInElement(document.body, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                    {left: '\\\\(', right: '\\\\)', display: false},
-                    {left: '\\\\[', right: '\\\\]', display: true}
-                ],
-                throwOnError : false
-            });
+            if (typeof window.renderMathInElement === 'function') {
+                window.renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\\\(', right: '\\\\)', display: false},
+                        {left: '\\\\[', right: '\\\\]', display: true}
+                    ],
+                    throwOnError : false
+                });
+            }
 
             // Add Word Wrap and Copy buttons to all pre blocks (except mermaid blocks)
             document.querySelectorAll('pre').forEach(function(pre) {
@@ -402,134 +473,170 @@ enum MarkdownRenderer {
 
                 pre.appendChild(actionsDiv);
             });
-          </script>          <!-- Load Mermaid ESM -->
-          <script type="module">
-            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-            window.mermaid = mermaid;
-
-            var appearance = document.documentElement.getAttribute('data-appearance') || 'light';
-            var isDark = appearance === 'dark';
-            if (appearance === 'system') {
-              isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-            }
-            mermaid.initialize({
-              startOnLoad: true,
-              theme: isDark ? 'dark' : 'default',
-              securityLevel: 'strict'
-            });
+          </script>
+          <!-- Load Mermaid (IIFE version for better CSP compatibility) -->
+          \(mermaidScript)
+          <script>
+            (function() {
+              var appearance = document.documentElement.getAttribute('data-appearance') || 'light';
+              var isDark = appearance === 'dark';
+              if (appearance === 'system') {
+                isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+              }
+              if (window.mermaid && typeof window.mermaid.initialize === 'function' && typeof window.mermaid.run === 'function') {
+                window.mermaid.initialize({
+                  startOnLoad: false,
+                  theme: isDark ? 'dark' : 'default',
+                  securityLevel: 'strict'
+                });
+                window.mermaid.run();
+              }
+            })();
           </script>
         </body>
         </html>
         """
     }
-
-    private static func embedLocalImages(in html: String, baseURL: URL?) -> String {
-        guard let baseURL else {
-            return html
-        }
-        return LocalImageDataURIRewriter.rewrite(html: html, baseDirectory: baseURL)
-    }
 }
 
-private enum LocalImageDataURIRewriter {
-    private static let imgSrcRegex = try! NSRegularExpression(
-        pattern: #"(<img\b[^>]*?\bsrc=")([^"]*)(")"#,
-        options: [.caseInsensitive]
-    )
+private final class WebAssetBundleMarker: NSObject {}
 
-    private static let supportedMimeTypes = [
-        "png": "image/png",
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "gif": "image/gif",
-        "webp": "image/webp"
-    ]
+struct WebAssetBundle {
+    let highlightLightCSS: String
+    let highlightDarkCSS: String
+    let highlightJS: String
+    let katexCSS: String
+    let katexJS: String
+    let katexAutoRenderJS: String
+    let mermaidJS: String
 
-    static func rewrite(
-        html: String,
-        baseDirectory: URL,
-        byteLimit: Int = 4 * 1024 * 1024,
-        aggregateByteLimit: Int = 12 * 1024 * 1024
-    ) -> String {
-        let nsHTML = html as NSString
-        let regex = imgSrcRegex
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length))
-        guard !matches.isEmpty else {
-            return html
+    private static let bundledAssets = loadFromCandidateResourceRoots(preferred: Bundle(for: WebAssetBundleMarker.self))
+
+    static func load(bundle: Bundle = .main) -> WebAssetBundle? {
+        if bundle.bundleURL != Bundle.main.bundleURL,
+           let assets = loadUncached(bundle: bundle) {
+            return assets
         }
 
-        var chunks: [String] = []
-        chunks.reserveCapacity(matches.count * 2 + 1)
-        var cursor = 0
-        var embeddedBytes = 0
-        for match in matches {
-            chunks.append(nsHTML.substring(with: NSRange(location: cursor, length: match.range.location - cursor)))
-            let prefix = nsHTML.substring(with: match.range(at: 1))
-            let source = nsHTML.substring(with: match.range(at: 2))
-            let suffix = nsHTML.substring(with: match.range(at: 3))
-            if let image = dataURI(for: source, baseDirectory: baseDirectory, byteLimit: byteLimit),
-               embeddedBytes + image.byteCount <= aggregateByteLimit {
-                embeddedBytes += image.byteCount
-                chunks.append(prefix)
-                chunks.append(image.uri)
-                chunks.append(suffix)
-            } else {
-                chunks.append(nsHTML.substring(with: match.range))
-            }
-            cursor = match.range.location + match.range.length
-        }
-        chunks.append(nsHTML.substring(from: cursor))
-        return chunks.joined()
+        return bundledAssets
     }
 
-    private static func dataURI(for source: String, baseDirectory: URL, byteLimit: Int) -> (uri: String, byteCount: Int)? {
-        guard let url = resolvedURL(for: source, baseDirectory: baseDirectory) else {
+    private static func loadUncached(bundle: Bundle) -> WebAssetBundle? {
+        guard let resourceURL = bundle.resourceURL else {
             return nil
         }
-        let ext = url.pathExtension.lowercased()
-        guard let mimeType = supportedMimeTypes[ext] else {
-            return nil
-        }
-        guard isRegularFileWithinLimit(url: url, byteLimit: byteLimit) else {
-            return nil
-        }
-        guard let data = try? Data(contentsOf: url), data.count <= byteLimit else {
-            return nil
-        }
-        return ("data:\(mimeType);base64,\(data.base64EncodedString())", data.count)
+        return loadUncached(resourceRoot: resourceURL)
     }
 
-    private static func resolvedURL(for source: String, baseDirectory: URL) -> URL? {
-        guard !source.isEmpty, !source.hasPrefix("#"), !source.hasPrefix("/") else {
-            return nil
-        }
-        guard !source.contains(":") else {
-            return nil
-        }
-        let decoded = source.removingPercentEncoding ?? source
-        let baseURL = baseDirectory.resolvingSymlinksInPath().standardizedFileURL
-        let candidate = URL(fileURLWithPath: decoded, relativeTo: baseURL)
-            .resolvingSymlinksInPath()
-            .standardizedFileURL
-        guard isSubpath(candidate.path, of: baseURL.path) else {
-            return nil
-        }
-        return candidate
-    }
-
-    private static func isRegularFileWithinLimit(url: URL, byteLimit: Int) -> Bool {
+    private static func loadUncached(resourceRoot: URL) -> WebAssetBundle? {
         guard
-            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
-            values.isRegularFile == true,
-            let fileSize = values.fileSize,
-            fileSize <= byteLimit
+            let highlightLightCSS = read("highlight/github.min.css", resourceRoot: resourceRoot),
+            let highlightDarkCSS = read("highlight/github-dark.min.css", resourceRoot: resourceRoot),
+            let highlightJS = read("highlight/highlight.min.js", resourceRoot: resourceRoot),
+            let katexCSS = readKatexCSS(resourceRoot: resourceRoot),
+            let katexJS = read("katex/js/katex.min.js", resourceRoot: resourceRoot),
+            let katexAutoRenderJS = read("katex/js/auto-render.min.js", resourceRoot: resourceRoot),
+            let mermaidJS = read("mermaid/mermaid.min.js", resourceRoot: resourceRoot)
         else {
-            return false
+            return nil
         }
-        return true
+
+        return WebAssetBundle(
+            highlightLightCSS: highlightLightCSS,
+            highlightDarkCSS: highlightDarkCSS,
+            highlightJS: highlightJS,
+            katexCSS: katexCSS,
+            katexJS: katexJS,
+            katexAutoRenderJS: katexAutoRenderJS,
+            mermaidJS: mermaidJS
+        )
     }
 
-    private static func isSubpath(_ childPath: String, of basePath: String) -> Bool {
-        childPath == basePath || childPath.hasPrefix(basePath + "/")
+    private static func loadFromCandidateResourceRoots(preferred: Bundle) -> WebAssetBundle? {
+        for resourceRoot in candidateResourceRoots(preferred: preferred) {
+            if let assets = loadUncached(resourceRoot: resourceRoot) {
+                return assets
+            }
+        }
+        return nil
+    }
+
+    private static func candidateResourceRoots(preferred: Bundle) -> [URL] {
+        var candidates: [URL] = []
+        var seen = Set<URL>()
+
+        func append(_ url: URL?) {
+            guard let url else {
+                return
+            }
+            let standardized = url.standardizedFileURL
+            guard seen.insert(standardized).inserted else {
+                return
+            }
+            candidates.append(standardized)
+        }
+
+        for bundle in [preferred, Bundle.main] {
+            append(bundle.resourceURL)
+            append(bundle.bundleURL.appendingPathComponent("Contents/Resources", isDirectory: true))
+        }
+
+        return candidates
+    }
+
+    func highlightStyles(isDark: Bool) -> String {
+        """
+        \(styleTag(id: "hljs-light", css: highlightLightCSS, media: isDark ? "not all" : "all"))
+        \(styleTag(id: "hljs-dark", css: highlightDarkCSS, media: isDark ? "all" : "not all"))
+        """
+    }
+
+    func styleTag(id: String, source: KeyPath<WebAssetBundle, String>) -> String {
+        styleTag(id: id, css: self[keyPath: source])
+    }
+
+    func scriptTag(id: String, source: KeyPath<WebAssetBundle, String>) -> String {
+        #"<script id="\#(id)">\#(Self.escapeScript(self[keyPath: source]))</script>"#
+    }
+
+    private func styleTag(id: String, css: String, media: String = "all") -> String {
+        #"<style id="\#(id)" media="\#(media)">\#(Self.escapeStyle(css))</style>"#
+    }
+
+    private static func read(_ relativePath: String, resourceRoot: URL) -> String? {
+        let url = resourceRoot
+            .appendingPathComponent("WebAssets", isDirectory: true)
+            .appendingPathComponent(relativePath)
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    private static func readData(_ relativePath: String, resourceRoot: URL) -> Data? {
+        let url = resourceRoot
+            .appendingPathComponent("WebAssets", isDirectory: true)
+            .appendingPathComponent(relativePath)
+        return try? Data(contentsOf: url)
+    }
+
+    private static func readKatexCSS(resourceRoot: URL) -> String? {
+        guard var css = read("katex/css/katex.min.css", resourceRoot: resourceRoot) else {
+            return nil
+        }
+
+        for fontPath in Set(css.matches(of: /fonts\/[^)]*\.woff2/).map { String($0.output) }) {
+            guard let fontData = readData("katex/\(fontPath)", resourceRoot: resourceRoot) else {
+                return nil
+            }
+            let dataURL = "data:font/woff2;base64,\(fontData.base64EncodedString())"
+            css = css.replacingOccurrences(of: "url(\(fontPath))", with: "url(\(dataURL))")
+        }
+        return css
+    }
+
+    private static func escapeScript(_ script: String) -> String {
+        script.replacingOccurrences(of: "</script", with: "<\\/script", options: [.caseInsensitive])
+    }
+
+    private static func escapeStyle(_ style: String) -> String {
+        style.replacingOccurrences(of: "</style", with: "<\\/style", options: [.caseInsensitive])
     }
 }

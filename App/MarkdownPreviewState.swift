@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftUI
 
 struct RenderedDocument: Sendable {
@@ -26,38 +27,43 @@ struct RenderedDocument: Sendable {
         fontSize: Double = 14.5,
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
-    ) -> RenderedDocument {
+    ) async -> RenderedDocument {
         let title = url.deletingPathExtension().lastPathComponent
 
         do {
-            let (markdown, result, modificationDate) = try MarkdownDocumentLoader.withSecurityScopedAccess(to: url) { resolvedURL in
-                let modDate = try? resolvedURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-                let markdown = try MarkdownDocumentLoader.load(url: resolvedURL)
-                let renderResult = MarkdownRenderer.render(
-                    markdown: markdown,
-                    title: title,
-                    baseURL: resolvedURL.deletingLastPathComponent(),
-                    appearance: appearance,
-                    font: font,
-                    fontSize: fontSize,
-                    spacing: spacing,
-                    isTransparent: isTransparent
-                )
-                return (markdown, renderResult, modDate)
+            let resolvedURL = BookmarkManager.resolveBookmark(for: url) ?? url
+            let hasScopedAccess = resolvedURL.startAccessingSecurityScopedResource()
+            defer {
+                if hasScopedAccess {
+                    resolvedURL.stopAccessingSecurityScopedResource()
+                }
             }
-            
+
+            let modDate = try? resolvedURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+            let markdown = try MarkdownDocumentLoader.load(url: resolvedURL)
+            let renderResult = await MarkdownRenderer.render(
+                markdown: markdown,
+                title: title,
+                baseURL: resolvedURL.deletingLastPathComponent(),
+                appearance: appearance,
+                font: font,
+                fontSize: fontSize,
+                spacing: spacing,
+                isTransparent: isTransparent
+            )
+            let modificationDate = modDate
             let wordCount = RenderedDocument.calculateWordCount(for: markdown)
             let characterCount = markdown.count
-            
+
             return RenderedDocument(
-                title: result.title,
-                html: result.html,
-                bodyHTML: result.bodyHTML,
+                title: renderResult.title,
+                html: renderResult.html,
+                bodyHTML: renderResult.bodyHTML,
                 rawMarkdown: markdown,
-                headings: result.headings,
+                headings: renderResult.headings,
                 modificationDate: modificationDate,
                 fileURL: url,
-                metadata: result.metadata,
+                metadata: renderResult.metadata,
                 wordCount: wordCount,
                 characterCount: characterCount
             )
@@ -164,7 +170,7 @@ final class MarkdownPreviewState {
 
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            let document = RenderedDocument.load(from: url, appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: true)
+            let document = await RenderedDocument.load(from: url, appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: true)
             await MainActor.run {
                 guard self.renderGeneration == generation else { return }
                 self.renderedDocument = document

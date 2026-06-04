@@ -1,5 +1,5 @@
 ---
-title: "Ultimate Markdown Preview Stress Test"
+title: "PeekMark"
 author: "ChatGPT"
 description: "A comprehensive markdown document to test markdown preview engines and renderers."
 date: 2026-05-22
@@ -13,60 +13,9 @@ tags:
   - ui
 category: testing-suite
 draft: false
-cover: ./assets/cover.png
 ---
 
-# 🚀 Ultimate Markdown Preview Stress Test
-
-Welcome to the **ultimate markdown torture test**.
-
-This file is intentionally packed with:
-
-- Front matter
-- Tables
-- Task lists
-- Nested lists
-- Syntax highlighting
-- Mermaid diagrams
-- LaTeX math
-- Footnotes
-- Blockquotes
-- HTML
-- Alerts / callouts
-- Images
-- Links
-- Collapsible sections
-- Emojis
-- Unicode
-- Code fences
-- Diff blocks
-- YAML / JSON / TOML
-- GitHub flavored markdown
-- Wide content
-- Anchors
-- Horizontal rules
-- Inline formatting
-- Admonitions
-- Keyboard shortcuts
-- Mixed markdown + HTML
-
----
-
-# Table of Contents
-
-1. [Typography](#typography)
-2. [Lists](#lists)
-3. [Tables](#tables)
-4. [Code Blocks](#code-blocks)
-5. [LaTeX](#latex)
-6. [Mermaid](#mermaid)
-7. [HTML](#html)
-8. [Callouts](#callouts)
-9. [Media](#media)
-10. [Advanced Layout](#advanced-layout)
-11. [Wide Content](#wide-content)
-12. [Footnotes](#footnotes)
-13. [Edge Cases](#edge-cases)
+# 📑 Welcome to PeekMark
 
 ---
 
@@ -430,17 +379,23 @@ pie title Markdown Features
 
 ## Images
 
-![Placeholder Image](https://picsum.photos/800/300)
+The first public release of PeekMark intentionally does not render images.
 
-## Linked Image
+- **Remote images** (e.g. `![alt](https://example.com/x.png)`) are stripped from
+  the preview for privacy — opening a Markdown file must not cause PeekMark
+  to contact a third-party host.
+- **Local relative images** (e.g. `![alt](photo.png)` next to the Markdown
+  file) are also not rendered. PeekMark runs inside the macOS App Sandbox
+  and only has read access to the file the user explicitly opened, so it
+  cannot read sibling image files in the same directory. The corresponding
+  `<img>` tag is stripped from the preview to avoid a broken-image icon.
+- **Inline raster data URIs** are self-contained and are preserved by the
+  renderer. This is the supported way to embed an image in Markdown intended
+  for PeekMark. The 16×16 blue image below is a real, renderable example:
 
-[![OpenAI](https://picsum.photos/300/100)](https://openai.com)
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAG0lEQVR4nGP4TyJgAGKDBGLRqIZRDQOtgSQAAOI/5Nhj/YMPAAAAAElFTkSuQmCC" alt="inline raster data URI" width="16" height="16">
 
-## Video Embed HTML
-
-<video controls width="400">
-  <source src="sample.mp4" type="video/mp4">
-</video>
+See the README "Limitations" section for details.
 
 ---
 
@@ -559,7 +514,7 @@ ___
 - [ ] Syntax highlighting
 - [ ] Inline code styling
 - [ ] Table overflow
-- [ ] Image loading
+- [ ] Inline raster data URI preserved
 - [ ] HTML sanitization
 - [ ] Mermaid rendering
 - [ ] LaTeX rendering

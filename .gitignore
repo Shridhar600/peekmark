@@ -10,9 +10,12 @@ xcuserdata/
 *.appex
 *.zip
 .worktrees/
+PeekMark.xcodeproj/
 docs/
 .agents/
 .mavis/
 .opencode/
-claude.md
 .claude/
+CLAUDE.md
+claude.md
+PeekMark Deom.mp4

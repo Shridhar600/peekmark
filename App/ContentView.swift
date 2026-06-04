@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -239,16 +240,33 @@ struct ContentView: View {
     }
 
     private func loadFileURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-                guard
-                    let data = item as? Data,
-                    let url = URL(dataRepresentation: data, relativeTo: nil)
-                else {
-                    continuation.resume(returning: nil)
-                    return
+        await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
+            let flag = OSAllocatedUnfairLock(initialState: false)
+
+            let timeoutTask = Task {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                flag.withLock { hasResumed in
+                    if !hasResumed {
+                        hasResumed = true
+                        continuation.resume(returning: nil)
+                    }
                 }
-                continuation.resume(returning: url)
+            }
+
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                let data = item as? Data
+                timeoutTask.cancel()
+                flag.withLock { hasResumed in
+                    if !hasResumed {
+                        hasResumed = true
+                        if let data,
+                           let url = URL(dataRepresentation: data, relativeTo: nil) {
+                            continuation.resume(returning: url)
+                        } else {
+                            continuation.resume(returning: nil)
+                        }
+                    }
+                }
             }
         }
     }
