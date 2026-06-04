@@ -7,9 +7,6 @@ final class PeekMarkAppDelegate: NSObject, NSApplicationDelegate {
     private var pendingOpenURLs: [URL] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let icon = NSImage(named: "AppIcon") {
-            NSApplication.shared.applicationIconImage = icon
-        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

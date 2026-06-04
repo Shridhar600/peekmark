@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="PeekMark logo">
-  <path d="M17 8h25l12 12v36H17z" fill="#F7F3E8" stroke="#123D35" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M42 8v13h12" fill="#D6E6DE" stroke="#123D35" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M24 28h19v4H24zm0 9h14v4H24z" fill="#123D35"/>
-  <path d="M11 46c5.5-7 12.6-10.5 21-10.5S47.5 39 53 46c-5.5 7-12.6 10.5-21 10.5S16.5 53 11 46z" fill="#78BFAE" stroke="#123D35" stroke-width="3" stroke-linejoin="round"/>
-  <circle cx="32" cy="46" r="5.5" fill="#123D35"/>
-</svg>

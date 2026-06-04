@@ -20,6 +20,7 @@ targets:
       - path: App
       - path: Shared
       - path: Assets/Assets.xcassets
+      - path: Assets/peekmark.icon
       - path: WebAssets
         type: folder
         buildPhase: resources
@@ -29,7 +30,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.peekmark.mac
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: App/PeekMark.entitlements
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: peekmark
         GENERATE_INFOPLIST_FILE: NO
     dependencies:
       - target: PeekMarkQuickLookExtension

@@ -74,7 +74,11 @@ fi
 
 verify_existing_install_identity "$INSTALL_PATH"
 unregister_launch_services "$INSTALL_PATH"
-unregister_launch_services "$DERIVED_DATA_APP_PATH"
+if [[ -d "$DERIVED_DATA_APP_PATH" && -f "$DERIVED_DATA_APP_PATH/Contents/Info.plist" ]]; then
+  unregister_launch_services "$DERIVED_DATA_APP_PATH"
+else
+  echo "Skipped Launch Services unregister for local build at $DERIVED_DATA_APP_PATH because the bundle is missing or incomplete."
+fi
 remove_installed_app
 
 qlmanage -r cache
