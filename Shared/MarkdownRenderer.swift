@@ -19,7 +19,7 @@ enum MarkdownRenderer {
         baseURL: URL? = nil,
         appearance: MarkdownAppearance = .light,
         font: PreviewFont = .system,
-        fontSize: Double = 14.5,
+        fontSize: Double = 12,
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
     ) async -> MarkdownRenderResult {
@@ -35,7 +35,7 @@ enum MarkdownRenderer {
         message: String,
         appearance: MarkdownAppearance = .light,
         font: PreviewFont = .system,
-        fontSize: Double = 14.5,
+        fontSize: Double = 12,
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
     ) -> MarkdownRenderResult {
@@ -191,7 +191,7 @@ enum MarkdownRenderer {
         headings: [HeadingItem] = [],
         appearance: MarkdownAppearance,
         font: PreviewFont = .system,
-        fontSize: Double = 14.5,
+        fontSize: Double = 12,
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
     ) -> MarkdownRenderResult {
