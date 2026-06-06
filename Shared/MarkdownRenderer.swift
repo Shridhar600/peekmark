@@ -233,6 +233,19 @@ enum MarkdownRenderer {
         )
     }
 
+    /// A fresh, unpredictable per-render CSP nonce. Inline `<script>` tags carry
+    /// this value and the page's `script-src` allows only `'nonce-<value>'`, so
+    /// any script injected via crafted Markdown that slips past `HTMLSanitizer`
+    /// has no valid nonce and is refused by the WKWebView — `'unsafe-inline'` is
+    /// no longer needed for scripts. `SystemRandomNumberGenerator` is a CSPRNG
+    /// on Apple platforms; 128 bits is ample for a per-response nonce.
+    static func makeScriptNonce() -> String {
+        var rng = SystemRandomNumberGenerator()
+        let high = rng.next()
+        let low = rng.next()
+        return String(format: "%016llx%016llx", high, low)
+    }
+
     private static func documentHTML(
         title: String,
         body: String,
@@ -269,6 +282,7 @@ enum MarkdownRenderer {
         webAssets: WebAssetBundle?
     ) -> String {
         let isDark = appearance == .dark
+        let nonce = makeScriptNonce()
         let highlightCSSLink: String
         let highlightScript: String
         let katexCSS: String
@@ -294,11 +308,11 @@ enum MarkdownRenderer {
             let needsMermaid = body.contains("language-mermaid")
 
             highlightCSSLink = needsHighlight ? webAssets.highlightStyles(isDark: isDark) : ""
-            highlightScript = needsHighlight ? webAssets.scriptTag(id: "hljs-script", source: \.highlightJS) : ""
+            highlightScript = needsHighlight ? webAssets.scriptTag(id: "hljs-script", source: \.highlightJS, nonce: nonce) : ""
             katexCSS = needsKatex ? webAssets.styleTag(id: "katex-style", source: \.katexCSS) : ""
-            katexScript = needsKatex ? webAssets.scriptTag(id: "katex-script", source: \.katexJS) : ""
-            katexAutoRenderScript = needsKatex ? webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS) : ""
-            mermaidScript = needsMermaid ? webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS) : ""
+            katexScript = needsKatex ? webAssets.scriptTag(id: "katex-script", source: \.katexJS, nonce: nonce) : ""
+            katexAutoRenderScript = needsKatex ? webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS, nonce: nonce) : ""
+            mermaidScript = needsMermaid ? webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS, nonce: nonce) : ""
             assetErrorBanner = nil
         } else {
             highlightCSSLink = ""
@@ -317,8 +331,8 @@ enum MarkdownRenderer {
         <html data-appearance="\(appearance.rawValue)">
         <head>
           <meta charset="utf-8">
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; connect-src 'none';">
-          <script>
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-\(nonce)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; connect-src 'none';">
+          <script nonce="\(nonce)">
             // Mock matchMedia to match resolved appearance
             (function() {
               const originalMatchMedia = window.matchMedia;
@@ -416,7 +430,7 @@ enum MarkdownRenderer {
         \(body)
           </main>
 
-          <script>
+          <script nonce="\(nonce)">
             // Auto-assign slugified IDs to headings for anchor links
             document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(function(heading) {
                 if (!heading.id) {
@@ -519,7 +533,7 @@ enum MarkdownRenderer {
           </script>
           <!-- Load Mermaid (IIFE version for better CSP compatibility) -->
           \(mermaidScript)
-          <script>
+          <script nonce="\(nonce)">
             (function() {
               var appearance = document.documentElement.getAttribute('data-appearance') || 'light';
               var isDark = appearance === 'dark';
@@ -638,8 +652,8 @@ struct WebAssetBundle {
         styleTag(id: id, css: self[keyPath: source])
     }
 
-    func scriptTag(id: String, source: KeyPath<WebAssetBundle, String>) -> String {
-        #"<script id="\#(id)">\#(Self.escapeScript(self[keyPath: source]))</script>"#
+    func scriptTag(id: String, source: KeyPath<WebAssetBundle, String>, nonce: String) -> String {
+        #"<script nonce="\#(nonce)" id="\#(id)">\#(Self.escapeScript(self[keyPath: source]))</script>"#
     }
 
     private func styleTag(id: String, css: String, media: String = "all") -> String {

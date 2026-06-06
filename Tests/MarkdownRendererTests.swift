@@ -294,10 +294,10 @@ final class MarkdownRendererTests: XCTestCase {
 
         XCTAssertTrue(result.html.contains(#"<style id="hljs-light" media="all">"#))
         XCTAssertTrue(result.html.contains(#"<style id="katex-style" media="all">"#))
-        XCTAssertTrue(result.html.contains(#"<script id="hljs-script">"#))
-        XCTAssertTrue(result.html.contains(#"<script id="katex-script">"#))
-        XCTAssertTrue(result.html.contains(#"<script id="katex-auto-render-script">"#))
-        XCTAssertTrue(result.html.contains(#"<script id="mermaid-script">"#))
+        XCTAssertTrue(result.html.contains(#"id="hljs-script">"#))
+        XCTAssertTrue(result.html.contains(#"id="katex-script">"#))
+        XCTAssertTrue(result.html.contains(#"id="katex-auto-render-script">"#))
+        XCTAssertTrue(result.html.contains(#"id="mermaid-script">"#))
         XCTAssertTrue(result.html.contains("data:font/woff2;base64,"))
         XCTAssertFalse(result.html.contains(#"src="https://cdnjs.cloudflare.com"#))
         XCTAssertFalse(result.html.contains(#"src="https://cdn.jsdelivr.net"#))
@@ -328,11 +328,11 @@ final class MarkdownRendererTests: XCTestCase {
 
         XCTAssertTrue(result.contains(#"<style id="hljs-light" media="all">/*light*/</style>"#))
         XCTAssertTrue(result.contains(#"<style id="hljs-dark" media="not all">/*dark*/</style>"#))
-        XCTAssertTrue(result.contains(#"<script id="hljs-script">//hljs</script>"#))
+        XCTAssertTrue(result.contains(#"id="hljs-script">//hljs</script>"#))
         XCTAssertTrue(result.contains(#"<style id="katex-style" media="all">/*katex*/</style>"#))
-        XCTAssertTrue(result.contains(#"<script id="katex-script">//katex</script>"#))
-        XCTAssertTrue(result.contains(#"<script id="katex-auto-render-script">//autorender</script>"#))
-        XCTAssertTrue(result.contains(#"<script id="mermaid-script">//mermaid</script>"#))
+        XCTAssertTrue(result.contains(#"id="katex-script">//katex</script>"#))
+        XCTAssertTrue(result.contains(#"id="katex-auto-render-script">//autorender</script>"#))
+        XCTAssertTrue(result.contains(#"id="mermaid-script">//mermaid</script>"#))
         XCTAssertFalse(result.contains("peekmark-asset-error"))
         XCTAssertTrue(result.contains("default-src 'none'"))
         XCTAssertTrue(result.contains("connect-src 'none'"))
@@ -368,9 +368,9 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertTrue(result.contains("language-mermaid"))
         XCTAssertTrue(result.contains("connect-src 'none'"))
 
-        XCTAssertFalse(result.contains(#"<script id="hljs-script">"#))
-        XCTAssertFalse(result.contains(#"<script id="katex-script">"#))
-        XCTAssertFalse(result.contains(#"<script id="mermaid-script">"#))
+        XCTAssertFalse(result.contains(#"id="hljs-script">"#))
+        XCTAssertFalse(result.contains(#"id="katex-script">"#))
+        XCTAssertFalse(result.contains(#"id="mermaid-script">"#))
         XCTAssertFalse(result.contains(#"<style id="katex-style""#))
         XCTAssertFalse(result.contains("cdnjs.cloudflare.com"))
         XCTAssertFalse(result.contains("cdn.jsdelivr.net"))
@@ -386,9 +386,9 @@ final class MarkdownRendererTests: XCTestCase {
             isTransparent: false, webAssets: fakeWebAssets()
         )
 
-        XCTAssertFalse(result.contains(#"<script id="hljs-script">"#), "no code → no highlight.js")
-        XCTAssertFalse(result.contains(#"<script id="katex-script">"#), "no math → no KaTeX")
-        XCTAssertFalse(result.contains(#"<script id="mermaid-script">"#), "no diagram → no Mermaid")
+        XCTAssertFalse(result.contains(#"id="hljs-script">"#), "no code → no highlight.js")
+        XCTAssertFalse(result.contains(#"id="katex-script">"#), "no math → no KaTeX")
+        XCTAssertFalse(result.contains(#"id="mermaid-script">"#), "no diagram → no Mermaid")
         XCTAssertFalse(result.contains(#"<style id="katex-style""#))
         XCTAssertFalse(result.contains("//mermaid"), "Mermaid source must not be inlined for plain prose")
         // Body still renders, defensive runtime guards remain, and this is not an error state.
@@ -405,11 +405,11 @@ final class MarkdownRendererTests: XCTestCase {
             isTransparent: false, webAssets: fakeWebAssets()
         )
 
-        XCTAssertTrue(result.contains(#"<script id="katex-script">//katex</script>"#))
-        XCTAssertTrue(result.contains(#"<script id="katex-auto-render-script">//autorender</script>"#))
+        XCTAssertTrue(result.contains(#"id="katex-script">//katex</script>"#))
+        XCTAssertTrue(result.contains(#"id="katex-auto-render-script">//autorender</script>"#))
         XCTAssertTrue(result.contains(#"<style id="katex-style""#))
-        XCTAssertFalse(result.contains(#"<script id="mermaid-script">"#), "math-only body must not ship Mermaid")
-        XCTAssertFalse(result.contains(#"<script id="hljs-script">"#), "math-only body has no code block")
+        XCTAssertFalse(result.contains(#"id="mermaid-script">"#), "math-only body must not ship Mermaid")
+        XCTAssertFalse(result.contains(#"id="hljs-script">"#), "math-only body has no code block")
     }
 
     func testIncludesMermaidForDiagramBody() {
@@ -420,8 +420,8 @@ final class MarkdownRendererTests: XCTestCase {
             isTransparent: false, webAssets: fakeWebAssets()
         )
 
-        XCTAssertTrue(result.contains(#"<script id="mermaid-script">//mermaid</script>"#))
-        XCTAssertFalse(result.contains(#"<script id="katex-script">"#), "diagram-only body has no math")
+        XCTAssertTrue(result.contains(#"id="mermaid-script">//mermaid</script>"#))
+        XCTAssertFalse(result.contains(#"id="katex-script">"#), "diagram-only body has no math")
         // Note: a Mermaid block lives inside a <pre>, so highlight.js is allowed
         // to load here (harmless — highlightAll runs after the mermaid <pre> is
         // converted to a <div>). We intentionally don't assert hljs absence.
@@ -435,10 +435,55 @@ final class MarkdownRendererTests: XCTestCase {
             isTransparent: false, webAssets: fakeWebAssets()
         )
 
-        XCTAssertTrue(result.contains(#"<script id="hljs-script">//hljs</script>"#))
+        XCTAssertTrue(result.contains(#"id="hljs-script">//hljs</script>"#))
         XCTAssertTrue(result.contains(#"<style id="hljs-light" media="all">/*light*/</style>"#))
-        XCTAssertFalse(result.contains(#"<script id="mermaid-script">"#), "plain code has no diagram")
-        XCTAssertFalse(result.contains(#"<script id="katex-script">"#), "plain code has no math")
+        XCTAssertFalse(result.contains(#"id="mermaid-script">"#), "plain code has no diagram")
+        XCTAssertFalse(result.contains(#"id="katex-script">"#), "plain code has no math")
+    }
+
+    // MARK: - CSP hardening: nonce'd scripts instead of 'unsafe-inline'
+
+    func testScriptCSPUsesNonceAndStrictDynamicNotUnsafeInline() {
+        let result = MarkdownRenderer.documentHTML(
+            title: "Doc",
+            body: "<h1>H</h1><pre><code class=\"language-swift\">x</code></pre><p>$x$</p><pre><code class=\"language-mermaid\">graph TD; A--&gt;B;</code></pre>",
+            appearance: .light, font: .system, fontSize: 14.5, spacing: .regular,
+            isTransparent: false, webAssets: fakeWebAssets()
+        )
+
+        // script-src is locked to a per-render nonce (+ strict-dynamic), never 'unsafe-inline'.
+        XCTAssertTrue(result.contains("script-src 'nonce-"))
+        XCTAssertTrue(result.contains("'strict-dynamic'"))
+        XCTAssertFalse(result.contains("script-src 'self' 'unsafe-inline'"))
+        // Styles still allow inline — KaTeX/Mermaid set element styles at runtime.
+        XCTAssertTrue(result.contains("style-src 'self' 'unsafe-inline'"))
+
+        // Every <script> tag in the document carries the nonce, so an injected
+        // inline script (no nonce) cannot execute. fakeWebAssets sentinels
+        // contain no literal "<script", so this split is reliable.
+        let nonce = extractScriptNonce(result)
+        XCTAssertNotNil(nonce, "CSP script-src nonce should be present")
+        for piece in result.components(separatedBy: "<script").dropFirst() {
+            XCTAssertTrue(
+                piece.hasPrefix(" nonce=\"\(nonce ?? "")\""),
+                "a <script> tag is missing the CSP nonce: <script\(piece.prefix(48))"
+            )
+        }
+    }
+
+    func testScriptNonceIsUniquePerRender() {
+        func renderOnce() -> String {
+            MarkdownRenderer.documentHTML(
+                title: "Doc", body: "<p>hi</p>",
+                appearance: .light, font: .system, fontSize: 14.5, spacing: .regular,
+                isTransparent: false, webAssets: fakeWebAssets()
+            )
+        }
+        let a = extractScriptNonce(renderOnce())
+        let b = extractScriptNonce(renderOnce())
+        XCTAssertNotNil(a)
+        XCTAssertNotNil(b)
+        XCTAssertNotEqual(a, b, "each render must use a fresh, unpredictable nonce")
     }
 
     func testSampleFileDoesNotEmbedLocalImages() async throws {
@@ -643,6 +688,13 @@ private extension String {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
+}
+
+/// Pulls the CSP script nonce out of a rendered document (`script-src 'nonce-XXXX'`).
+private func extractScriptNonce(_ html: String) -> String? {
+    guard let r = html.range(of: "script-src 'nonce-") else { return nil }
+    let nonce = html[r.upperBound...].prefix(while: { $0 != "'" })
+    return nonce.isEmpty ? nil : String(nonce)
 }
 
 /// Small, recognizable stand-in asset bundle for the conditional-injection
