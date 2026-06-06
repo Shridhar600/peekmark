@@ -17,8 +17,11 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $openedFile) {
-            recentDocumentsSection
+            // Collections (curated, stable) on top; Recent Documents (dynamic,
+            // grows as you open files) below — so opening a doc never shoves the
+            // collections around. Mirrors Finder's Favorites-on-top convention.
             collectionsSection
+            recentDocumentsSection
         }
         .listStyle(.sidebar)
         .scrollIndicators(.automatic)
@@ -87,12 +90,24 @@ struct SidebarView: View {
                 ForEach(sessionRecentFiles, id: \.self) { url in
                     HStack {
                         Label(url.deletingPathExtension().lastPathComponent, systemImage: "doc.text")
-                            .font(.system(.body, design: .rounded))
+                            .font(.system(.subheadline, design: .rounded))
                             .lineLimit(1)
                         Spacer()
                     }
                     .contentShape(Rectangle())
                     .tag(url as URL?)
+                    .contextMenu {
+                        if !pinboard.pinboard.collections.isEmpty {
+                            Menu("Add to Collection") {
+                                ForEach(pinboard.pinboard.collections) { collection in
+                                    Button(collection.name) {
+                                        BookmarkManager.saveBookmark(for: url)
+                                        try? pinboard.pin(url, kind: .file, to: collection.id)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

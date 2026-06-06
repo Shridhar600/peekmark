@@ -84,6 +84,20 @@ final class PinboardStoreTests: XCTestCase {
         XCTAssertEqual(store.pinboard.collections[1].items.count, 1)
     }
 
+    func testPinSameNameDifferentPathsBothPinned() throws {
+        // Dedupe is by absolute path, not filename: two different files that
+        // happen to share a name must both pin.
+        let (store, _) = makeStore()
+        let id = store.createCollection(name: "A")
+        try store.pin(fileURL("/foo/notes.md"), kind: .file, to: id)
+        try store.pin(fileURL("/bar/notes.md"), kind: .file, to: id)
+        XCTAssertEqual(store.pinboard.collections.first?.items.count, 2)
+        XCTAssertEqual(
+            Set(store.pinboard.collections.first!.items.map(\.path)),
+            ["/foo/notes.md", "/bar/notes.md"]
+        )
+    }
+
     func testRemoveItem() throws {
         let (store, _) = makeStore()
         let id = store.createCollection(name: "A")

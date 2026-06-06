@@ -18,6 +18,8 @@ struct ContentView: View {
 
     // Typography popover toggle
     @State private var showTypographyPopover = false
+    // Document-detail popover toggle (the stats previously shown in the sidebar)
+    @State private var showInfoPopover = false
 
     @State private var sessionRecentFiles: [URL] = []
     @AppStorage("recentFiles") private var recentFilesRaw: String = ""
@@ -92,6 +94,17 @@ struct ContentView: View {
                 }
                 .help("Copy Markdown Source")
                 .disabled(state.renderedDocument.isEmpty)
+
+                Button(action: { showInfoPopover.toggle() }) {
+                    Label("Document Info", systemImage: "info.circle")
+                }
+                .help("Document details")
+                .disabled(state.renderedDocument.isEmpty)
+                .popover(isPresented: $showInfoPopover, arrowEdge: .bottom) {
+                    StatsHUDView(state: state)
+                        .frame(width: 280)
+                        .padding(12)
+                }
 
                 Button(action: { showTypographyPopover.toggle() }) {
                     Label("Text Style", systemImage: "textformat.size")
@@ -175,7 +188,7 @@ struct ContentView: View {
             persistent = Array(persistent.prefix(5))
         }
         recentFilesRaw = persistent.map { $0.absoluteString }.joined(separator: "|")
-        
+
         // 2. Update session recents for active UI (do not re-order if already present)
         if !sessionRecentFiles.contains(standardURL) {
             sessionRecentFiles.insert(standardURL, at: 0)
@@ -233,6 +246,13 @@ struct ContentView: View {
         }
 
         let standardizedURL = url.standardizedFileURL
+        // Only open Markdown files via drop — ignore folders and other types.
+        // (Folders are organized by dropping onto a collection, not opened here.)
+        let isDirectory = (try? standardizedURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+        let ext = standardizedURL.pathExtension.lowercased()
+        guard !isDirectory, ext == "md" || ext == "markdown" else {
+            return false
+        }
         BookmarkManager.saveBookmark(for: standardizedURL)
         await MainActor.run {
             openedFile = standardizedURL
