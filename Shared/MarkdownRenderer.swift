@@ -250,12 +250,27 @@ enum MarkdownRenderer {
         let assetErrorBanner: String?
 
         if let webAssets {
-            highlightCSSLink = webAssets.highlightStyles(isDark: isDark)
-            highlightScript = webAssets.scriptTag(id: "hljs-script", source: \.highlightJS)
-            katexCSS = webAssets.styleTag(id: "katex-style", source: \.katexCSS)
-            katexScript = webAssets.scriptTag(id: "katex-script", source: \.katexJS)
-            katexAutoRenderScript = webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS)
-            mermaidScript = webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS)
+            // Only inline a vendor library when the rendered body actually uses
+            // it. This is safe — each library's runtime entrypoint is a no-op
+            // when its content is absent: highlight.js's `highlightAll()` finds
+            // no `<pre><code>`, KaTeX's `renderMathInElement` finds no math
+            // delimiters, and `mermaid.run()` finds no `.mermaid` blocks. So
+            // omitting an unused library cannot change what renders, but it
+            // avoids shipping and parsing megabytes of JS into the web view on
+            // every preview (Mermaid alone is ~3 MB) — the main cause of slow
+            // Quick Look previews. We bias toward *including* a library on any
+            // hint of its trigger, so the failure mode is "slightly slower",
+            // never "missing render".
+            let needsHighlight = body.contains("<pre")
+            let needsKatex = body.contains("$") || body.contains(#"\("#) || body.contains(#"\["#)
+            let needsMermaid = body.contains("language-mermaid")
+
+            highlightCSSLink = needsHighlight ? webAssets.highlightStyles(isDark: isDark) : ""
+            highlightScript = needsHighlight ? webAssets.scriptTag(id: "hljs-script", source: \.highlightJS) : ""
+            katexCSS = needsKatex ? webAssets.styleTag(id: "katex-style", source: \.katexCSS) : ""
+            katexScript = needsKatex ? webAssets.scriptTag(id: "katex-script", source: \.katexJS) : ""
+            katexAutoRenderScript = needsKatex ? webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS) : ""
+            mermaidScript = needsMermaid ? webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS) : ""
             assetErrorBanner = nil
         } else {
             highlightCSSLink = ""

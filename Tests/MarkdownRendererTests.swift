@@ -240,7 +240,23 @@ final class MarkdownRendererTests: XCTestCase {
     }
 
     func testUsesBundledWebAssetsWhenAvailable() async {
-        let result = await MarkdownRenderer.render(markdown: "# Title\n\nInline math $x^2$.", title: "Doc")
+        // Exercises all three vendor features (math, a code block, a Mermaid
+        // diagram) so every bundled asset is inlined — the point of this test is
+        // that assets come from the bundle, never a CDN.
+        let markdown = """
+        # Title
+
+        Inline math $x^2$.
+
+        ```swift
+        print("hi")
+        ```
+
+        ```mermaid
+        graph TD; A-->B;
+        ```
+        """
+        let result = await MarkdownRenderer.render(markdown: markdown, title: "Doc")
 
         XCTAssertTrue(result.html.contains(#"<style id="hljs-light" media="all">"#))
         XCTAssertTrue(result.html.contains(#"<style id="katex-style" media="all">"#))
@@ -256,9 +272,10 @@ final class MarkdownRendererTests: XCTestCase {
     }
 
     func testDocumentHTMLWithBundledAssetsRendersFullPreview() {
+        // Body exercises all three vendor features so every asset is inlined.
         let result = MarkdownRenderer.documentHTML(
             title: "Doc",
-            body: "<h1>Hello</h1>",
+            body: "<h1>Hello</h1><pre><code class=\"language-swift\">x</code></pre><p>$x^2$</p><pre><code class=\"language-mermaid\">graph TD; A--&gt;B;</code></pre>",
             appearance: .light,
             font: .system,
             fontSize: 14.5,
@@ -323,6 +340,71 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(result.contains(#"<style id="katex-style""#))
         XCTAssertFalse(result.contains("cdnjs.cloudflare.com"))
         XCTAssertFalse(result.contains("cdn.jsdelivr.net"))
+    }
+
+    // MARK: - Conditional vendor-asset injection (only inline libraries the body uses)
+
+    func testOmitsAllVendorAssetsForPlainProse() {
+        let result = MarkdownRenderer.documentHTML(
+            title: "Doc",
+            body: "<h1>Hello</h1><p>Plain prose with no code, math, or diagrams.</p>",
+            appearance: .light, font: .system, fontSize: 14.5, spacing: .regular,
+            isTransparent: false, webAssets: fakeWebAssets()
+        )
+
+        XCTAssertFalse(result.contains(#"<script id="hljs-script">"#), "no code → no highlight.js")
+        XCTAssertFalse(result.contains(#"<script id="katex-script">"#), "no math → no KaTeX")
+        XCTAssertFalse(result.contains(#"<script id="mermaid-script">"#), "no diagram → no Mermaid")
+        XCTAssertFalse(result.contains(#"<style id="katex-style""#))
+        XCTAssertFalse(result.contains("//mermaid"), "Mermaid source must not be inlined for plain prose")
+        // Body still renders, defensive runtime guards remain, and this is not an error state.
+        XCTAssertTrue(result.contains("<h1>Hello</h1>"))
+        XCTAssertTrue(result.contains("if (window.mermaid"))
+        XCTAssertFalse(result.contains("peekmark-asset-error"), "omission is an optimization, not an error")
+    }
+
+    func testIncludesOnlyKatexForMathOnlyBody() {
+        let result = MarkdownRenderer.documentHTML(
+            title: "Doc",
+            body: "<p>Euler: $e^{i\\pi}+1=0$</p>",
+            appearance: .light, font: .system, fontSize: 14.5, spacing: .regular,
+            isTransparent: false, webAssets: fakeWebAssets()
+        )
+
+        XCTAssertTrue(result.contains(#"<script id="katex-script">//katex</script>"#))
+        XCTAssertTrue(result.contains(#"<script id="katex-auto-render-script">//autorender</script>"#))
+        XCTAssertTrue(result.contains(#"<style id="katex-style""#))
+        XCTAssertFalse(result.contains(#"<script id="mermaid-script">"#), "math-only body must not ship Mermaid")
+        XCTAssertFalse(result.contains(#"<script id="hljs-script">"#), "math-only body has no code block")
+    }
+
+    func testIncludesMermaidForDiagramBody() {
+        let result = MarkdownRenderer.documentHTML(
+            title: "Doc",
+            body: "<pre><code class=\"language-mermaid\">graph TD; A--&gt;B;</code></pre>",
+            appearance: .light, font: .system, fontSize: 14.5, spacing: .regular,
+            isTransparent: false, webAssets: fakeWebAssets()
+        )
+
+        XCTAssertTrue(result.contains(#"<script id="mermaid-script">//mermaid</script>"#))
+        XCTAssertFalse(result.contains(#"<script id="katex-script">"#), "diagram-only body has no math")
+        // Note: a Mermaid block lives inside a <pre>, so highlight.js is allowed
+        // to load here (harmless — highlightAll runs after the mermaid <pre> is
+        // converted to a <div>). We intentionally don't assert hljs absence.
+    }
+
+    func testIncludesHighlightForCodeBody() {
+        let result = MarkdownRenderer.documentHTML(
+            title: "Doc",
+            body: "<pre><code class=\"language-swift\">print(\"hi\")</code></pre>",
+            appearance: .light, font: .system, fontSize: 14.5, spacing: .regular,
+            isTransparent: false, webAssets: fakeWebAssets()
+        )
+
+        XCTAssertTrue(result.contains(#"<script id="hljs-script">//hljs</script>"#))
+        XCTAssertTrue(result.contains(#"<style id="hljs-light" media="all">/*light*/</style>"#))
+        XCTAssertFalse(result.contains(#"<script id="mermaid-script">"#), "plain code has no diagram")
+        XCTAssertFalse(result.contains(#"<script id="katex-script">"#), "plain code has no math")
     }
 
     func testSampleFileDoesNotEmbedLocalImages() async throws {
@@ -527,4 +609,19 @@ private extension String {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
+}
+
+/// Small, recognizable stand-in asset bundle for the conditional-injection
+/// tests — each field is a short sentinel so assertions can match on the exact
+/// inlined source (e.g. `//mermaid`).
+private func fakeWebAssets() -> WebAssetBundle {
+    WebAssetBundle(
+        highlightLightCSS: "/*light*/",
+        highlightDarkCSS: "/*dark*/",
+        highlightJS: "//hljs",
+        katexCSS: "/*katex*/",
+        katexJS: "//katex",
+        katexAutoRenderJS: "//autorender",
+        mermaidJS: "//mermaid"
+    )
 }

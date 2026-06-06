@@ -28,6 +28,29 @@ Open a GitHub issue with the **Security** label, or email the maintainers direct
 - **Security-Scoped Bookmarks**: File access outside the sandbox uses macOS security-scoped bookmarks.
 - **First Public Release Limitations**: Local relative images are intentionally not rendered. See the README "Limitations" section for the full list.
 
+### Renderer & Network Model
+
+- **Vendored renderer assets** (Highlight.js, KaTeX, Mermaid) live in
+  `WebAssets/` inside both the app and Quick Look extension bundles. There
+  are no CDN fallbacks. The strict CSP (`default-src 'none'; ...`) prevents
+  the WKWebView from making any remote request even if a future bug tried
+  to.
+- **Unavoidable network entitlement.** The host app declares
+  `com.apple.security.network.client` because WKWebView's separate
+  `WebContent` rendering subprocess requires that entitlement to launch on
+  macOS 15+. The host process itself never opens a network socket.
+  Removing the entitlement blanks the preview silently. The strict CSP
+  is the defense that actually prevents network egress from the renderer.
+- **User-initiated link clicks** go through `NSWorkspace.shared.open` to
+  the user's default browser. This is a user-initiated action, not an
+  automatic call.
+- **Local images.** Local-relative `<img src="…">` and remote `<img>` are
+  stripped by `HTMLSanitizer` (see the HTML Sanitizer bullet in
+  *Security Model* above). Inline raster `data:` URIs (PNG, JPEG, GIF,
+  WebP) are preserved because they are self-contained. Local image
+  rendering may be reintroduced via a sandbox-safe mechanism (e.g.
+  `loadFileURL` with scoped read access) in a future release.
+
 ## What to Report
 
 - HTML injection or XSS via rendered Markdown
