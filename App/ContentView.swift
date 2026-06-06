@@ -11,6 +11,7 @@ struct ContentView: View {
     let openMarkdownFile: () -> Void
 
     @State private var state = MarkdownPreviewState()
+    @State private var pinboard = PinboardStore()
     @State private var selection: SidebarItem? = .preview
     @State private var searchText = ""
     @State private var scrollToHeaderIndex: Int?
@@ -50,7 +51,7 @@ struct ContentView: View {
                 openedFile: $openedFile,
                 sessionRecentFiles: $sessionRecentFiles,
                 recentFilesRaw: $recentFilesRaw,
-                state: state
+                pinboard: pinboard
             )
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {

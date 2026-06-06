@@ -23,10 +23,38 @@ enum MarkdownRenderer {
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
     ) async -> MarkdownRenderResult {
+        renderDocument(
+            markdown: markdown,
+            title: title,
+            baseURL: baseURL,
+            appearance: appearance,
+            font: font,
+            fontSize: fontSize,
+            spacing: spacing,
+            isTransparent: isTransparent
+        )
+    }
+
+    /// Full synchronous render pipeline: strips YAML front matter, renders the
+    /// remaining Markdown body, and wraps it in the themed HTML document.
+    ///
+    /// Both the app (`render`) and the Quick Look extension (`PreviewProvider`)
+    /// go through this single entry point so the two surfaces cannot drift — in
+    /// particular, front matter is stripped from the preview body in *both*
+    /// places. (Previously the extension rendered the raw file, so YAML front
+    /// matter leaked into the Quick Look preview as visible text.)
+    static func renderDocument(
+        markdown: String,
+        title: String,
+        baseURL: URL? = nil,
+        appearance: MarkdownAppearance = .light,
+        font: PreviewFont = .system,
+        fontSize: Double = 12,
+        spacing: PreviewSpacing = .regular,
+        isTransparent: Bool = false
+    ) -> MarkdownRenderResult {
         let (metadata, content) = parseFrontMatter(markdown)
-
-        let (bodyHTML, headings) = await renderBodyAsync(markdown: content, baseURL: baseURL)
-
+        let (bodyHTML, headings) = renderBody(markdown: content, baseURL: baseURL)
         return wrapHTML(title: title, bodyHTML: bodyHTML, metadata: metadata, headings: headings, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent)
     }
 
@@ -205,6 +233,19 @@ enum MarkdownRenderer {
         )
     }
 
+    /// A fresh, unpredictable per-render CSP nonce. Inline `<script>` tags carry
+    /// this value and the page's `script-src` allows only `'nonce-<value>'`, so
+    /// any script injected via crafted Markdown that slips past `HTMLSanitizer`
+    /// has no valid nonce and is refused by the WKWebView — `'unsafe-inline'` is
+    /// no longer needed for scripts. `SystemRandomNumberGenerator` is a CSPRNG
+    /// on Apple platforms; 128 bits is ample for a per-response nonce.
+    static func makeScriptNonce() -> String {
+        var rng = SystemRandomNumberGenerator()
+        let high = rng.next()
+        let low = rng.next()
+        return String(format: "%016llx%016llx", high, low)
+    }
+
     private static func documentHTML(
         title: String,
         body: String,
@@ -241,6 +282,7 @@ enum MarkdownRenderer {
         webAssets: WebAssetBundle?
     ) -> String {
         let isDark = appearance == .dark
+        let nonce = makeScriptNonce()
         let highlightCSSLink: String
         let highlightScript: String
         let katexCSS: String
@@ -250,12 +292,27 @@ enum MarkdownRenderer {
         let assetErrorBanner: String?
 
         if let webAssets {
-            highlightCSSLink = webAssets.highlightStyles(isDark: isDark)
-            highlightScript = webAssets.scriptTag(id: "hljs-script", source: \.highlightJS)
-            katexCSS = webAssets.styleTag(id: "katex-style", source: \.katexCSS)
-            katexScript = webAssets.scriptTag(id: "katex-script", source: \.katexJS)
-            katexAutoRenderScript = webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS)
-            mermaidScript = webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS)
+            // Only inline a vendor library when the rendered body actually uses
+            // it. This is safe — each library's runtime entrypoint is a no-op
+            // when its content is absent: highlight.js's `highlightAll()` finds
+            // no `<pre><code>`, KaTeX's `renderMathInElement` finds no math
+            // delimiters, and `mermaid.run()` finds no `.mermaid` blocks. So
+            // omitting an unused library cannot change what renders, but it
+            // avoids shipping and parsing megabytes of JS into the web view on
+            // every preview (Mermaid alone is ~3 MB) — the main cause of slow
+            // Quick Look previews. We bias toward *including* a library on any
+            // hint of its trigger, so the failure mode is "slightly slower",
+            // never "missing render".
+            let needsHighlight = body.contains("<pre")
+            let needsKatex = body.contains("$") || body.contains(#"\("#) || body.contains(#"\["#)
+            let needsMermaid = body.contains("language-mermaid")
+
+            highlightCSSLink = needsHighlight ? webAssets.highlightStyles(isDark: isDark) : ""
+            highlightScript = needsHighlight ? webAssets.scriptTag(id: "hljs-script", source: \.highlightJS, nonce: nonce) : ""
+            katexCSS = needsKatex ? webAssets.styleTag(id: "katex-style", source: \.katexCSS) : ""
+            katexScript = needsKatex ? webAssets.scriptTag(id: "katex-script", source: \.katexJS, nonce: nonce) : ""
+            katexAutoRenderScript = needsKatex ? webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS, nonce: nonce) : ""
+            mermaidScript = needsMermaid ? webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS, nonce: nonce) : ""
             assetErrorBanner = nil
         } else {
             highlightCSSLink = ""
@@ -274,8 +331,8 @@ enum MarkdownRenderer {
         <html data-appearance="\(appearance.rawValue)">
         <head>
           <meta charset="utf-8">
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; connect-src 'none';">
-          <script>
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-\(nonce)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; connect-src 'none';">
+          <script nonce="\(nonce)">
             // Mock matchMedia to match resolved appearance
             (function() {
               const originalMatchMedia = window.matchMedia;
@@ -373,7 +430,7 @@ enum MarkdownRenderer {
         \(body)
           </main>
 
-          <script>
+          <script nonce="\(nonce)">
             // Auto-assign slugified IDs to headings for anchor links
             document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(function(heading) {
                 if (!heading.id) {
@@ -476,7 +533,7 @@ enum MarkdownRenderer {
           </script>
           <!-- Load Mermaid (IIFE version for better CSP compatibility) -->
           \(mermaidScript)
-          <script>
+          <script nonce="\(nonce)">
             (function() {
               var appearance = document.documentElement.getAttribute('data-appearance') || 'light';
               var isDark = appearance === 'dark';
@@ -595,8 +652,8 @@ struct WebAssetBundle {
         styleTag(id: id, css: self[keyPath: source])
     }
 
-    func scriptTag(id: String, source: KeyPath<WebAssetBundle, String>) -> String {
-        #"<script id="\#(id)">\#(Self.escapeScript(self[keyPath: source]))</script>"#
+    func scriptTag(id: String, source: KeyPath<WebAssetBundle, String>, nonce: String) -> String {
+        #"<script nonce="\#(nonce)" id="\#(id)">\#(Self.escapeScript(self[keyPath: source]))</script>"#
     }
 
     private func styleTag(id: String, css: String, media: String = "all") -> String {
