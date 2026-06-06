@@ -15,7 +15,11 @@
   <img src="https://img.shields.io/badge/sandboxed-✓-blueviolet" alt="Sandboxed">
 </p>
 
-![PeekMark demo](https://github.com/user-attachments/assets/PLACEHOLDER-REPLACE-IN-STEP-5)
+<p align="center">
+  <img src="Assets/peekmark-app.gif" width="48%" alt="PeekMark reader in action">
+  &nbsp;
+  <img src="Assets/peekmark-quicklook.gif" width="48%" alt="Finder Quick Look preview">
+</p>
 
 Open `.md` files in Finder with **Space** to get a clean, sandboxed Quick Look preview, or launch PeekMark for the full reading experience with dynamic typography, in-document search, and persistent recents. Math, diagrams, code, and footnotes render locally — no network, no tracking.
 
