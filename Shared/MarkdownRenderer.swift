@@ -23,10 +23,38 @@ enum MarkdownRenderer {
         spacing: PreviewSpacing = .regular,
         isTransparent: Bool = false
     ) async -> MarkdownRenderResult {
+        renderDocument(
+            markdown: markdown,
+            title: title,
+            baseURL: baseURL,
+            appearance: appearance,
+            font: font,
+            fontSize: fontSize,
+            spacing: spacing,
+            isTransparent: isTransparent
+        )
+    }
+
+    /// Full synchronous render pipeline: strips YAML front matter, renders the
+    /// remaining Markdown body, and wraps it in the themed HTML document.
+    ///
+    /// Both the app (`render`) and the Quick Look extension (`PreviewProvider`)
+    /// go through this single entry point so the two surfaces cannot drift — in
+    /// particular, front matter is stripped from the preview body in *both*
+    /// places. (Previously the extension rendered the raw file, so YAML front
+    /// matter leaked into the Quick Look preview as visible text.)
+    static func renderDocument(
+        markdown: String,
+        title: String,
+        baseURL: URL? = nil,
+        appearance: MarkdownAppearance = .light,
+        font: PreviewFont = .system,
+        fontSize: Double = 12,
+        spacing: PreviewSpacing = .regular,
+        isTransparent: Bool = false
+    ) -> MarkdownRenderResult {
         let (metadata, content) = parseFrontMatter(markdown)
-
-        let (bodyHTML, headings) = await renderBodyAsync(markdown: content, baseURL: baseURL)
-
+        let (bodyHTML, headings) = renderBody(markdown: content, baseURL: baseURL)
         return wrapHTML(title: title, bodyHTML: bodyHTML, metadata: metadata, headings: headings, appearance: appearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: isTransparent)
     }
 
