@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build · test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Compile the app + Quick Look extension (no signing on CI).
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project PeekMark.xcodeproj \
+            -scheme PeekMark \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Run the unit tests (renderer + pinboard store).
+      - name: Test
+        run: |
+          xcodebuild test \
+            -project PeekMark.xcodeproj \
+            -scheme PeekMarkTests \
+            -destination 'platform=macOS'
