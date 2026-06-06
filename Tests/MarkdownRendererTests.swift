@@ -229,6 +229,40 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertTrue(result.bodyHTML.contains("<h1>Title</h1>"))
     }
 
+    func testRenderDocumentStripsFrontMatterFromPreviewBody() {
+        // Regression: the Quick Look extension used to render the raw file, so
+        // YAML front matter appeared as visible text in the preview. Both the
+        // app and the extension now share `renderDocument`, which strips it.
+        let markdown = """
+        ---
+        title: Secret Notes
+        author: PeekMark
+        ---
+        # Visible Heading
+
+        Body text.
+        """
+        let result = MarkdownRenderer.renderDocument(markdown: markdown, title: "Doc")
+
+        XCTAssertFalse(result.bodyHTML.contains("Secret Notes"), "front-matter value leaked into body: \(result.bodyHTML)")
+        XCTAssertFalse(result.bodyHTML.contains("author:"), "front-matter key leaked into body")
+        XCTAssertFalse(result.html.contains("Secret Notes"), "front-matter value leaked into full document")
+        // Metadata is still parsed and available to callers.
+        XCTAssertEqual(result.metadata["title"], "Secret Notes")
+        XCTAssertEqual(result.metadata["author"], "PeekMark")
+        // The real document content still renders.
+        XCTAssertTrue(result.bodyHTML.contains("<h1>Visible Heading</h1>"))
+        XCTAssertTrue(result.bodyHTML.contains("Body text."))
+    }
+
+    func testRenderDocumentWithoutFrontMatterRendersFullBody() {
+        // No leading `---` → nothing is stripped.
+        let result = MarkdownRenderer.renderDocument(markdown: "# Heading\n\nJust content.", title: "Doc")
+        XCTAssertTrue(result.bodyHTML.contains("<h1>Heading</h1>"))
+        XCTAssertTrue(result.bodyHTML.contains("Just content."))
+        XCTAssertTrue(result.metadata.isEmpty)
+    }
+
     func testVendorEnhancementsAreDefensiveWhenAssetsFailToLoad() async {
         let result = await MarkdownRenderer.render(markdown: "# Title\n\n```swift\nprint(\"hello\")\n```", title: "Doc")
 

@@ -26,14 +26,10 @@ final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
 
                 let markdown = try MarkdownDocumentLoader.load(url: resolvedURL)
 
-                let (bodyHTML, headings) = MarkdownRenderer.renderBody(markdown: markdown, baseURL: resolvedURL.deletingLastPathComponent())
-                let metadata = MarkdownRenderer.parseFrontMatter(markdown).metadata
-
-                result = MarkdownRenderer.wrapHTML(
+                result = MarkdownRenderer.renderDocument(
+                    markdown: markdown,
                     title: title,
-                    bodyHTML: bodyHTML,
-                    metadata: metadata,
-                    headings: headings,
+                    baseURL: resolvedURL.deletingLastPathComponent(),
                     appearance: resolvedAppearance
                 )
             } catch {
