@@ -21,7 +21,7 @@
   <img src="Assets/peekmark-quicklook.gif" width="48%" alt="Finder Quick Look preview">
 </p>
 
-Open `.md` files in Finder with **Space** to get a clean, sandboxed Quick Look preview, or launch PeekMark for the full reading experience with dynamic typography, in-document search, and persistent recents. Math, diagrams, code, and footnotes render locally — no network, no tracking.
+Open `.md` files in Finder with **Space** to get a clean, sandboxed Quick Look preview, or launch PeekMark for the full reading experience with dynamic typography, in-document search, and a sidebar organizer — pin files and whole folders into named collections, alongside recents. Math, diagrams, code, and footnotes render locally — no network, no tracking.
 
 ## Quick Start
 
@@ -56,7 +56,8 @@ To uninstall: `./script/uninstall.sh`.
 ### ⚡ Finder integration
 - **Space-bar preview** — system Quick Look extension launches from any Finder window.
 - **Heading anchors** — slugified `id` attributes on every heading for in-doc navigation.
-- **Recent files** — sidebar with security-scoped bookmarks, persistent across launches.
+- **Recent files** — sidebar list of recently opened documents, persistent across launches.
+- **Collections** — pin files and whole folders into named collections; pinned folders expand to their live `.md` list. All references use security-scoped bookmarks (the files never move).
 
 ### 🔒 Privacy by default
 - **Sandboxed** — Apple App Sandbox, minimal entitlements, security-scoped bookmarks.
