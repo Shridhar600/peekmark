@@ -17,7 +17,7 @@ jobs:
     # API used in the app (matches the local development toolchain).
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Xcode version
         run: xcodebuild -version
