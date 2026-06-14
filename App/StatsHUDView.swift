@@ -1,17 +1,5 @@
 import SwiftUI
 
-struct StatsHUDBackgroundModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 16.0, *) {
-            content
-                .glassEffect(.regular, in: .rect(cornerRadius: 12))
-        } else {
-            content
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
-}
-
 struct StatsHUDView: View {
     let state: MarkdownPreviewState
     
@@ -117,9 +105,9 @@ struct StatsHUDView: View {
                     }
                 }
             }
-            .padding(12)
-            .modifier(StatsHUDBackgroundModifier())
-            .padding()
+            // No background/padding here: this view is presented inside a .popover,
+            // which already supplies Liquid Glass chrome and padding (set by the
+            // caller). A glassEffect here would be glass-on-glass.
         }
     }
 }
