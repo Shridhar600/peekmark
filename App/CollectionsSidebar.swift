@@ -204,10 +204,7 @@ struct FolderPinRow: View {
             if isExpanded { Task { await load() } }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "folder")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(item.displayName)
+                Label(item.displayName, systemImage: "folder")
                     .font(.system(.subheadline, design: .rounded))
                     .lineLimit(1)
                 Spacer()
