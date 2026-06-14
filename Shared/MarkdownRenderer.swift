@@ -308,11 +308,11 @@ enum MarkdownRenderer {
             let needsMermaid = body.contains("language-mermaid")
 
             highlightCSSLink = needsHighlight ? webAssets.highlightStyles(isDark: isDark) : ""
-            highlightScript = needsHighlight ? webAssets.scriptTag(id: "hljs-script", source: \.highlightJS, nonce: nonce) : ""
+            highlightScript = needsHighlight ? webAssets.scriptTag(id: "hljs-script", source: \.highlightJSEscaped, nonce: nonce) : ""
             katexCSS = needsKatex ? webAssets.styleTag(id: "katex-style", source: \.katexCSS) : ""
-            katexScript = needsKatex ? webAssets.scriptTag(id: "katex-script", source: \.katexJS, nonce: nonce) : ""
-            katexAutoRenderScript = needsKatex ? webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJS, nonce: nonce) : ""
-            mermaidScript = needsMermaid ? webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJS, nonce: nonce) : ""
+            katexScript = needsKatex ? webAssets.scriptTag(id: "katex-script", source: \.katexJSEscaped, nonce: nonce) : ""
+            katexAutoRenderScript = needsKatex ? webAssets.scriptTag(id: "katex-auto-render-script", source: \.katexAutoRenderJSEscaped, nonce: nonce) : ""
+            mermaidScript = needsMermaid ? webAssets.scriptTag(id: "mermaid-script", source: \.mermaidJSEscaped, nonce: nonce) : ""
             assetErrorBanner = nil
         } else {
             highlightCSSLink = ""
@@ -567,6 +567,36 @@ struct WebAssetBundle {
     let katexAutoRenderJS: String
     let mermaidJS: String
 
+    // Pre-escaped <script> bodies, computed once at load so per-render document
+    // assembly is pure concatenation instead of re-scanning multi-MB vendor JS
+    // for "</script" on every preview build (Mermaid alone is ~3 MB).
+    let highlightJSEscaped: String
+    let katexJSEscaped: String
+    let katexAutoRenderJSEscaped: String
+    let mermaidJSEscaped: String
+
+    init(
+        highlightLightCSS: String,
+        highlightDarkCSS: String,
+        highlightJS: String,
+        katexCSS: String,
+        katexJS: String,
+        katexAutoRenderJS: String,
+        mermaidJS: String
+    ) {
+        self.highlightLightCSS = highlightLightCSS
+        self.highlightDarkCSS = highlightDarkCSS
+        self.highlightJS = highlightJS
+        self.katexCSS = katexCSS
+        self.katexJS = katexJS
+        self.katexAutoRenderJS = katexAutoRenderJS
+        self.mermaidJS = mermaidJS
+        self.highlightJSEscaped = Self.escapeScript(highlightJS)
+        self.katexJSEscaped = Self.escapeScript(katexJS)
+        self.katexAutoRenderJSEscaped = Self.escapeScript(katexAutoRenderJS)
+        self.mermaidJSEscaped = Self.escapeScript(mermaidJS)
+    }
+
     private static let bundledAssets = loadFromCandidateResourceRoots(preferred: Bundle(for: WebAssetBundleMarker.self))
 
     static func load(bundle: Bundle = .main) -> WebAssetBundle? {
@@ -652,8 +682,9 @@ struct WebAssetBundle {
         styleTag(id: id, css: self[keyPath: source])
     }
 
+    /// `source` must point at a pre-escaped `*Escaped` property (escaped once in `init`).
     func scriptTag(id: String, source: KeyPath<WebAssetBundle, String>, nonce: String) -> String {
-        #"<script nonce="\#(nonce)" id="\#(id)">\#(Self.escapeScript(self[keyPath: source]))</script>"#
+        #"<script nonce="\#(nonce)" id="\#(id)">\#(self[keyPath: source])</script>"#
     }
 
     private func styleTag(id: String, css: String, media: String = "all") -> String {

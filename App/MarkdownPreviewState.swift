@@ -32,15 +32,23 @@ struct RenderedDocument: Sendable {
 
         do {
             let resolvedURL = BookmarkManager.resolveBookmark(for: url) ?? url
-            let hasScopedAccess = resolvedURL.startAccessingSecurityScopedResource()
-            defer {
-                if hasScopedAccess {
-                    resolvedURL.stopAccessingSecurityScopedResource()
+
+            // Hold the security scope only for the file read. Rendering works purely
+            // on the in-memory markdown string, so we release the scope before the
+            // (async) render rather than keeping it open across the await.
+            let modDate: Date?
+            let markdown: String
+            do {
+                let hasScopedAccess = resolvedURL.startAccessingSecurityScopedResource()
+                defer {
+                    if hasScopedAccess {
+                        resolvedURL.stopAccessingSecurityScopedResource()
+                    }
                 }
+                modDate = try? resolvedURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                markdown = try MarkdownDocumentLoader.load(url: resolvedURL)
             }
 
-            let modDate = try? resolvedURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-            let markdown = try MarkdownDocumentLoader.load(url: resolvedURL)
             let renderResult = await MarkdownRenderer.render(
                 markdown: markdown,
                 title: title,
