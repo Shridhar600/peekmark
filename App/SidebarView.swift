@@ -4,6 +4,7 @@ struct SidebarView: View {
     @Binding var openedFile: URL?
     let recents: RecentDocumentsStore
     let pinboard: PinboardStore
+    @Environment(ErrorPresenter.self) private var errorPresenter: ErrorPresenter?
 
     // Collection create/rename/delete are driven by alerts (not inline TextField
     // editing inside a List, which is a classic focus-bug source). State lives
@@ -117,7 +118,13 @@ struct SidebarView: View {
     /// Resolves a recent's own bookmark (re-minting if stale), hydrates the shared
     /// BookmarkManager so the standard open flow can reach it, then opens it.
     private func openRecent(_ document: RecentDocument) {
-        guard let url = recents.resolveURL(for: document) else { return }
+        guard let url = recents.resolveURL(for: document) else {
+            errorPresenter?.present(
+                "Can’t Open Document",
+                "“\(displayName(of: document))” may have been moved or deleted."
+            )
+            return
+        }
         BookmarkManager.saveBookmark(for: url)
         openedFile = url
     }
@@ -126,11 +133,21 @@ struct SidebarView: View {
     /// security scope held open while `pin` mints its own bookmark — otherwise the
     /// file isn't accessible at mint time and the pin silently fails.
     private func addRecentToCollection(_ document: RecentDocument, _ collectionID: PinnedCollection.ID) {
-        guard let url = recents.resolveURL(for: document) else { return }
+        guard let url = recents.resolveURL(for: document) else {
+            errorPresenter?.present(
+                "Can’t Add to Collection",
+                "“\(displayName(of: document))” may have been moved or deleted."
+            )
+            return
+        }
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         BookmarkManager.saveBookmark(for: url)
         try? pinboard.pin(url, kind: .file, to: collectionID)
+    }
+
+    private func displayName(of document: RecentDocument) -> String {
+        (document.displayName as NSString).deletingPathExtension
     }
 
     // MARK: - Collections

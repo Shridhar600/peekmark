@@ -170,6 +170,7 @@ struct FolderPinRow: View {
     let item: PinnedItem
     let collectionID: PinnedCollection.ID
     @Binding var openedFile: URL?
+    @Environment(ErrorPresenter.self) private var errorPresenter: ErrorPresenter?
 
     @State private var isExpanded = false
     @State private var children: [URL] = []
@@ -272,11 +273,16 @@ struct FolderPinRow: View {
     /// security scope, so we briefly activate it, mint a security-scoped bookmark
     /// for the child (registered with BookmarkManager), then open via the normal flow.
     private func open(_ childURL: URL) {
-        if let dir = pinboard.resolveURL(for: item) {
-            let accessed = dir.startAccessingSecurityScopedResource()
-            defer { if accessed { dir.stopAccessingSecurityScopedResource() } }
-            BookmarkManager.saveBookmark(for: childURL)
+        guard let dir = pinboard.resolveURL(for: item) else {
+            errorPresenter?.present(
+                "Folder Unavailable",
+                "“\(item.displayName)” may have been moved or deleted."
+            )
+            return
         }
+        let accessed = dir.startAccessingSecurityScopedResource()
+        defer { if accessed { dir.stopAccessingSecurityScopedResource() } }
+        BookmarkManager.saveBookmark(for: childURL)
         openedFile = childURL
     }
 }

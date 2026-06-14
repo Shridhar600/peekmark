@@ -12,6 +12,7 @@ struct ContentView: View {
 
     @State private var state = MarkdownPreviewState()
     @State private var pinboard = PinboardStore()
+    @State private var errorPresenter = ErrorPresenter()
     @State private var selection: SidebarItem? = .preview
     @State private var searchText = ""
     @State private var scrollToHeaderIndex: Int?
@@ -61,6 +62,19 @@ struct ContentView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 720, idealWidth: 1020, minHeight: 520, idealHeight: 780)
+        .environment(errorPresenter)
+        .alert(
+            errorPresenter.current?.title ?? "",
+            isPresented: Binding(
+                get: { errorPresenter.current != nil },
+                set: { if !$0 { errorPresenter.current = nil } }
+            ),
+            presenting: errorPresenter.current
+        ) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { presented in
+            Text(presented.message)
+        }
         .searchable(text: $searchText, prompt: "Search in document...")
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .toolbar {
