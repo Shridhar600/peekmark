@@ -21,8 +21,9 @@ struct ContentView: View {
     // Document-detail popover toggle (the stats previously shown in the sidebar)
     @State private var showInfoPopover = false
 
-    @State private var sessionRecentFiles: [URL] = []
-    @AppStorage("recentFiles") private var recentFilesRaw: String = ""
+    @State private var recents = RecentDocumentsStore()
+    // Legacy "|"-joined recents (pre-RecentDocumentsStore); read once to migrate.
+    @AppStorage("recentFiles") private var legacyRecentFilesRaw: String = ""
     @AppStorage("previewFont") private var selectedFont: PreviewFont = .system
     @AppStorage("previewSpacing") private var selectedSpacing: PreviewSpacing = .compact
     @AppStorage("previewFontSize") private var selectedFontSize: Double = 14.5
@@ -51,8 +52,7 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView(
                 openedFile: $openedFile,
-                sessionRecentFiles: $sessionRecentFiles,
-                recentFilesRaw: $recentFilesRaw,
+                recents: recents,
                 pinboard: pinboard
             )
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
@@ -122,7 +122,7 @@ struct ContentView: View {
         }
         .onAppear {
             selectedAppearance = .system
-            sessionRecentFiles = persistentRecentFiles
+            migrateLegacyRecentsIfNeeded()
             loadOpenedFile()
         }
         .onChange(of: openedFile) { _, _ in
@@ -167,35 +167,22 @@ struct ContentView: View {
         }
     }
 
-    private var persistentRecentFiles: [URL] {
-        recentFilesRaw.split(separator: "|").compactMap { string in
+    /// One-time migration of the legacy "|"-joined recent-paths string into the
+    /// bookmark-backed RecentDocumentsStore. Best-effort: a legacy path migrates only
+    /// if the shared BookmarkManager still resolves a bookmark for it (so the recent
+    /// can mint one it owns). Oldest first, so the newest ends up on top after the
+    /// insert-at-front in `add`.
+    private func migrateLegacyRecentsIfNeeded() {
+        guard recents.documents.isEmpty, !legacyRecentFilesRaw.isEmpty else { return }
+        let legacy = legacyRecentFilesRaw.split(separator: "|").compactMap { string -> URL? in
             let str = String(string)
-            if str.hasPrefix("file://") {
-                return URL(string: str)
-            } else {
-                return URL(fileURLWithPath: str)
-            }
+            return str.hasPrefix("file://") ? URL(string: str) : URL(fileURLWithPath: str)
         }
-    }
-
-    private func addToRecentFiles(_ url: URL) {
-        let standardURL = url.resolvingSymlinksInPath()
-        
-        // 1. Update persistent storage (always move to top for next launch)
-        var persistent = persistentRecentFiles.filter { $0 != standardURL }
-        persistent.insert(standardURL, at: 0)
-        if persistent.count > 5 {
-            persistent = Array(persistent.prefix(5))
+        for url in legacy.reversed() {
+            guard let resolved = BookmarkManager.resolveBookmark(for: url) else { continue }
+            recents.add(url: resolved)
         }
-        recentFilesRaw = persistent.map { $0.absoluteString }.joined(separator: "|")
-
-        // 2. Update session recents for active UI (do not re-order if already present)
-        if !sessionRecentFiles.contains(standardURL) {
-            sessionRecentFiles.insert(standardURL, at: 0)
-            if sessionRecentFiles.count > 5 {
-                sessionRecentFiles = Array(sessionRecentFiles.prefix(5))
-            }
-        }
+        legacyRecentFilesRaw = ""
     }
 
     private func updateStyle() {
@@ -224,10 +211,9 @@ struct ContentView: View {
         let targetURL = BookmarkManager.resolveBookmark(for: standardizedURL) ?? standardizedURL
         state.load(url: targetURL, appearance: selectedAppearance, font: selectedFont, fontSize: selectedFontSize, spacing: selectedSpacing)
         
-        // Industry-standard recent documents sorting behavior:
-        // Do not instantly re-sort the sidebar list if the document is already in the recents list.
-        // This avoids layout jumping under the cursor. It will be sorted on next app launch or when a new file is added.
-        addToRecentFiles(targetURL)
+        // Re-opening a doc already in recents keeps its position (no reshuffle under
+        // the cursor); new docs go to the top.
+        recents.add(url: targetURL)
         
         if openedFile != standardizedURL {
             Task { @MainActor in

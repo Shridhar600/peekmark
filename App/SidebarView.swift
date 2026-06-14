@@ -2,8 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Binding var openedFile: URL?
-    @Binding var sessionRecentFiles: [URL]
-    @Binding var recentFilesRaw: String
+    let recents: RecentDocumentsStore
     let pinboard: PinboardStore
 
     // Collection create/rename/delete are driven by alerts (not inline TextField
@@ -67,42 +66,44 @@ struct SidebarView: View {
                     .fontWeight(.semibold)
                 Spacer()
                 Button(action: {
-                    recentFilesRaw = ""
-                    sessionRecentFiles = []
+                    recents.clear()
                     openedFile = nil
                 }) {
                     Text("Clear")
                 }
                 .buttonStyle(ClearButtonStyle())
-                .disabled(sessionRecentFiles.isEmpty)
+                .disabled(recents.documents.isEmpty)
             }
             .padding(.trailing, 16)
             .padding(.bottom, 6)
             .padding(.top, 4)
         ) {
-            if sessionRecentFiles.isEmpty {
+            if recents.documents.isEmpty {
                 Text("No recent documents")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundColor(.secondary)
                     .padding(.vertical, 4)
                     .padding(.horizontal, 4)
             } else {
-                ForEach(sessionRecentFiles, id: \.self) { url in
-                    HStack {
-                        Label(url.deletingPathExtension().lastPathComponent, systemImage: "doc.text")
-                            .font(.system(.subheadline, design: .rounded))
-                            .lineLimit(1)
-                        Spacer()
+                ForEach(recents.documents) { document in
+                    Button {
+                        openRecent(document)
+                    } label: {
+                        HStack {
+                            Label((document.displayName as NSString).deletingPathExtension, systemImage: "doc.text")
+                                .font(.system(.subheadline, design: .rounded))
+                                .lineLimit(1)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
-                    .tag(url as URL?)
+                    .buttonStyle(.plain)
                     .contextMenu {
                         if !pinboard.pinboard.collections.isEmpty {
                             Menu("Add to Collection") {
                                 ForEach(pinboard.pinboard.collections) { collection in
                                     Button(collection.name) {
-                                        BookmarkManager.saveBookmark(for: url)
-                                        try? pinboard.pin(url, kind: .file, to: collection.id)
+                                        addRecentToCollection(document, collection.id)
                                     }
                                 }
                             }
@@ -111,6 +112,25 @@ struct SidebarView: View {
                 }
             }
         }
+    }
+
+    /// Resolves a recent's own bookmark (re-minting if stale), hydrates the shared
+    /// BookmarkManager so the standard open flow can reach it, then opens it.
+    private func openRecent(_ document: RecentDocument) {
+        guard let url = recents.resolveURL(for: document) else { return }
+        BookmarkManager.saveBookmark(for: url)
+        openedFile = url
+    }
+
+    /// Pins a recent into a collection. The recent's bookmark is resolved and its
+    /// security scope held open while `pin` mints its own bookmark — otherwise the
+    /// file isn't accessible at mint time and the pin silently fails.
+    private func addRecentToCollection(_ document: RecentDocument, _ collectionID: PinnedCollection.ID) {
+        guard let url = recents.resolveURL(for: document) else { return }
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        BookmarkManager.saveBookmark(for: url)
+        try? pinboard.pin(url, kind: .file, to: collectionID)
     }
 
     // MARK: - Collections

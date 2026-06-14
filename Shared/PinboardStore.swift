@@ -191,17 +191,10 @@ final class PinboardStore {
     }
 
     nonisolated static func defaultMakeBookmark(_ url: URL) throws -> Data {
-        try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+        try SecurityScopedBookmark.make(url)
     }
 
     nonisolated static func defaultResolveBookmark(_ data: Data) -> BookmarkResolution? {
-        var isStale = false
-        guard let url = try? URL(resolvingBookmarkData: data,
-                                 options: .withSecurityScope,
-                                 relativeTo: nil,
-                                 bookmarkDataIsStale: &isStale) else {
-            return nil
-        }
-        return (url, isStale)
+        SecurityScopedBookmark.resolve(data)
     }
 }
