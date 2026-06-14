@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 #if canImport(AppKit)
 import AppKit
@@ -99,7 +100,12 @@ enum PreviewSpacing: String, CaseIterable, Identifiable {
 }
 
 enum PeekMarkTheme {
-    private static nonisolated(unsafe) var cssCache: [CacheKey: String] = [:]
+    // CSS generation runs inside concurrent `Task.detached` renders, so the cache
+    // must be synchronized. A plain `nonisolated(unsafe)` Dictionary here was a real
+    // data race (concurrent insert can corrupt the buffer / crash). The lock guards
+    // only the dictionary access, never the (pure, idempotent) CSS generation — a
+    // double-miss just regenerates identical output, which is harmless.
+    private static let cssCache = OSAllocatedUnfairLock<[CacheKey: String]>(initialState: [:])
 
     private struct CacheKey: Hashable {
         let appearance: MarkdownAppearance
@@ -116,7 +122,7 @@ enum PeekMarkTheme {
         isTransparent: Bool = false
     ) -> String {
         let cacheKey = CacheKey(appearance: appearance, font: font, fontSize: fontSize, spacing: spacing)
-        if let cached = cssCache[cacheKey] {
+        if let cached = cssCache.withLock({ $0[cacheKey] }) {
             return cached
         }
         let generatedCSS: String
@@ -170,7 +176,7 @@ enum PeekMarkTheme {
                 adaptiveDarkCSS: ""
             )
         }
-        cssCache[cacheKey] = generatedCSS
+        cssCache.withLock { $0[cacheKey] = generatedCSS }
         return generatedCSS
     }
 

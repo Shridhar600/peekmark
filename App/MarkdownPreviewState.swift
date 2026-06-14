@@ -92,11 +92,13 @@ struct RenderedDocument: Sendable {
         }
     }
 
+    // Hoisted so an 8 MB document doesn't rebuild this set on every load.
+    private static let wordSeparators = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
+
     fileprivate static func calculateWordCount(for text: String) -> Int {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return 0 }
-        let charSet = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters)
-        let components = trimmed.components(separatedBy: charSet)
+        let components = trimmed.components(separatedBy: wordSeparators)
         return components.filter { !$0.isEmpty }.count
     }
 
