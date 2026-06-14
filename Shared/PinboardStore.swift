@@ -16,13 +16,23 @@ final class PinboardStore {
     private let defaults: UserDefaults
     private let storageKey: String
     private let makeBookmark: (URL) throws -> Data
+    private let resolveBookmarkData: (Data) -> BookmarkResolution?
 
+    /// The outcome of resolving a security-scoped bookmark: the URL plus whether the
+    /// stored bookmark data went stale (and so should be re-minted).
+    typealias BookmarkResolution = (url: URL, isStale: Bool)
+
+    // `makeBookmark` stays the first closure parameter so existing trailing-closure
+    // call sites keep binding to it (SE-0286 forward-scan matches the first
+    // function-typed parameter). `resolveBookmarkData` is an explicitly-labeled seam.
     init(defaults: UserDefaults = .standard,
          storageKey: String = "pinboard.v1",
-         makeBookmark: @escaping (URL) throws -> Data = PinboardStore.defaultMakeBookmark) {
+         makeBookmark: @escaping (URL) throws -> Data = PinboardStore.defaultMakeBookmark,
+         resolveBookmarkData: @escaping (Data) -> BookmarkResolution? = PinboardStore.defaultResolveBookmark) {
         self.defaults = defaults
         self.storageKey = storageKey
         self.makeBookmark = makeBookmark
+        self.resolveBookmarkData = resolveBookmarkData
         self.pinboard = PinboardStore.load(defaults: defaults, key: storageKey)
     }
 
@@ -108,11 +118,31 @@ final class PinboardStore {
     /// for `startAccessingSecurityScopedResource()` / `stop…`. Returns nil if the
     /// bookmark is stale or unresolvable (e.g. the file was moved or deleted).
     func resolveURL(for item: PinnedItem) -> URL? {
-        var isStale = false
-        return try? URL(resolvingBookmarkData: item.bookmark,
-                        options: .withSecurityScope,
-                        relativeTo: nil,
-                        bookmarkDataIsStale: &isStale)
+        guard let resolution = resolveBookmarkData(item.bookmark) else { return nil }
+        // A stale bookmark still resolves once, but the OS is telling us to re-mint
+        // it — otherwise sandbox access silently decays over time / OS updates.
+        // Refresh and persist the fresh bookmark back into the item so the pin keeps
+        // working on the next launch.
+        if resolution.isStale {
+            refreshBookmark(for: item.id, resolvedURL: resolution.url)
+        }
+        return resolution.url
+    }
+
+    /// Re-mints a fresh bookmark for a moved/stale pin (inside its own security
+    /// scope) and persists it back into the item, preserving the item's identity
+    /// and collection position.
+    private func refreshBookmark(for itemID: PinnedItem.ID, resolvedURL: URL) {
+        let accessed = resolvedURL.startAccessingSecurityScopedResource()
+        defer { if accessed { resolvedURL.stopAccessingSecurityScopedResource() } }
+        guard let fresh = try? makeBookmark(resolvedURL) else { return }
+        for cIdx in pinboard.collections.indices {
+            guard let iIdx = pinboard.collections[cIdx].items.firstIndex(where: { $0.id == itemID }) else { continue }
+            pinboard.collections[cIdx].items[iIdx].bookmark = fresh
+            pinboard.collections[cIdx].items[iIdx].path = resolvedURL.standardizedFileURL.path
+            persist()
+            return
+        }
     }
 
     /// Top-level Markdown files in `directory`, sorted case-insensitively by name.
@@ -162,5 +192,16 @@ final class PinboardStore {
 
     nonisolated static func defaultMakeBookmark(_ url: URL) throws -> Data {
         try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+    }
+
+    nonisolated static func defaultResolveBookmark(_ data: Data) -> BookmarkResolution? {
+        var isStale = false
+        guard let url = try? URL(resolvingBookmarkData: data,
+                                 options: .withSecurityScope,
+                                 relativeTo: nil,
+                                 bookmarkDataIsStale: &isStale) else {
+            return nil
+        }
+        return (url, isStale)
     }
 }

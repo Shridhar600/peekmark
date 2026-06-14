@@ -161,4 +161,55 @@ final class PinboardStoreTests: XCTestCase {
             "only top-level .md/.markdown (case-insensitive), sorted, excluding .txt and subdirectories"
         )
     }
+
+    // MARK: Stale-bookmark refresh
+
+    func testResolveURLRefreshesAndPersistsStaleBookmark() throws {
+        let suite = UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        // Resolver reports the bookmark as stale and points at a new location, so
+        // resolveURL must re-mint and write the fresh bookmark back into the item.
+        let store = PinboardStore(
+            defaults: defaults,
+            storageKey: "test",
+            makeBookmark: { url in Data("fresh:\(url.path)".utf8) },
+            resolveBookmarkData: { _ in (URL(fileURLWithPath: "/docs/moved.md"), true) }
+        )
+        let cid = store.createCollection(name: "A")
+        try store.pin(fileURL("/docs/notes.md"), kind: .file, to: cid)
+        let original = try XCTUnwrap(store.pinboard.collections.first?.items.first)
+
+        _ = store.resolveURL(for: original)
+
+        let refreshed = try XCTUnwrap(store.pinboard.collections.first?.items.first)
+        XCTAssertEqual(refreshed.id, original.id, "item identity is preserved")
+        XCTAssertEqual(refreshed.bookmark, Data("fresh:/docs/moved.md".utf8), "stale bookmark is re-minted")
+        XCTAssertEqual(refreshed.path, "/docs/moved.md", "path hint follows the re-minted location")
+
+        let reloaded = PinboardStore(defaults: defaults, storageKey: "test") { _ in Data() }
+        XCTAssertEqual(
+            reloaded.pinboard.collections.first?.items.first?.bookmark,
+            Data("fresh:/docs/moved.md".utf8),
+            "the refreshed bookmark is persisted"
+        )
+    }
+
+    func testResolveURLLeavesFreshBookmarkUntouched() throws {
+        let store = PinboardStore(
+            defaults: UserDefaults(suiteName: UUID().uuidString)!,
+            storageKey: "test",
+            makeBookmark: { url in Data("bm:\(url.path)".utf8) },
+            resolveBookmarkData: { _ in (URL(fileURLWithPath: "/docs/notes.md"), false) }
+        )
+        let cid = store.createCollection(name: "A")
+        try store.pin(fileURL("/docs/notes.md"), kind: .file, to: cid)
+        let before = try XCTUnwrap(store.pinboard.collections.first?.items.first?.bookmark)
+
+        _ = store.resolveURL(for: try XCTUnwrap(store.pinboard.collections.first?.items.first))
+
+        let after = try XCTUnwrap(store.pinboard.collections.first?.items.first?.bookmark)
+        XCTAssertEqual(before, after, "a non-stale bookmark is left untouched")
+    }
 }
