@@ -144,6 +144,11 @@ final class MarkdownPreviewState {
     var renderedDocument: RenderedDocument = .empty
     var renderGeneration: Int = 0
 
+    // The in-flight document load and the debounced style refresh. Stored so a new
+    // request cancels the previous one instead of stacking concurrent renders.
+    private var loadTask: Task<Void, Never>?
+    private var styleRegenTask: Task<Void, Never>?
+
     var wordCount: Int {
         renderedDocument.wordCount
     }
@@ -165,12 +170,15 @@ final class MarkdownPreviewState {
         fontSize: Double = 14.5,
         spacing: PreviewSpacing = .regular
     ) {
+        // A new document supersedes any in-flight load or pending style refresh.
+        loadTask?.cancel()
+        styleRegenTask?.cancel()
         renderGeneration += 1
         let generation = renderGeneration
 
         let resolvedAppearance = appearance.resolved
 
-        Task.detached(priority: .userInitiated) { [weak self] in
+        loadTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let document = await RenderedDocument.load(from: url, appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: true)
             await MainActor.run {
@@ -181,6 +189,8 @@ final class MarkdownPreviewState {
     }
 
     func clear() {
+        loadTask?.cancel()
+        styleRegenTask?.cancel()
         renderedDocument = .empty
         renderGeneration += 1
     }
@@ -192,14 +202,35 @@ final class MarkdownPreviewState {
         spacing: PreviewSpacing,
         currentURL: URL?
     ) {
-        renderGeneration += 1
-        
         let resolvedAppearance = appearance.resolved
 
         if let currentURL {
             load(url: currentURL, appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing)
-        } else {
-            renderedDocument = renderedDocument.withStyle(appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: true)
+            return
+        }
+
+        // Pure typography/appearance change on the already-loaded document.
+        //
+        // The WKWebView updates live via its incremental CSS-variable path (it reads
+        // the font/size/spacing/appearance props directly), so we must NOT rebuild the
+        // full themed HTML on the main thread here — doing that on every slider step
+        // re-inlined the multi-MB vendor JS and janked the drag. Instead we refresh
+        // renderedDocument.html OFF the main thread, debounced, purely so a later FULL
+        // reload (search / document switch) starts from the current style.
+        let current = renderedDocument
+        guard !current.bodyHTML.isEmpty else { return }
+
+        styleRegenTask?.cancel()
+        styleRegenTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(180))
+            if Task.isCancelled { return }
+            let restyled = await Task.detached {
+                current.withStyle(appearance: resolvedAppearance, font: font, fontSize: fontSize, spacing: spacing, isTransparent: true)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            // Only apply if the same document is still shown — never clobber a newer load.
+            guard self.renderedDocument.bodyHTML == current.bodyHTML else { return }
+            self.renderedDocument = restyled
         }
     }
 }
