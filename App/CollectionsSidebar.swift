@@ -11,6 +11,7 @@ struct CollectionDisclosure: View {
     @Binding var openedFile: URL?
     let onRename: () -> Void
     let onDelete: () -> Void
+    @Environment(ErrorPresenter.self) private var errorPresenter: ErrorPresenter?
 
     var body: some View {
         Group {
@@ -89,20 +90,28 @@ struct CollectionDisclosure: View {
     @MainActor
     private func pinDroppedFiles(_ providers: [NSItemProvider]) async {
         let urls = await FileDropSupport.loadFileURLs(from: providers)
+        var pinnedCount = 0
+        var rejectedCount = 0
         for url in urls {
             let std = url.standardizedFileURL
             let isDirectory = (try? std.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             if isDirectory {
                 // Folder source: the pinboard stores its own security-scoped
                 // folder bookmark (used later to enumerate + open children).
-                try? pinboard.pin(std, kind: .folder, to: collection.id)
+                do { try pinboard.pin(std, kind: .folder, to: collection.id); pinnedCount += 1 } catch { rejectedCount += 1 }
             } else {
                 let ext = std.pathExtension.lowercased()
-                guard ext == "md" || ext == "markdown" else { continue }
+                guard ext == "md" || ext == "markdown" else { rejectedCount += 1; continue }
                 // File: register with BookmarkManager so the existing open flow resolves it.
                 BookmarkManager.saveBookmark(for: std)
-                try? pinboard.pin(std, kind: .file, to: collection.id)
+                do { try pinboard.pin(std, kind: .file, to: collection.id); pinnedCount += 1 } catch { rejectedCount += 1 }
             }
+        }
+        if pinnedCount == 0 && rejectedCount > 0 {
+            errorPresenter?.present(
+                "Nothing Added",
+                "Only Markdown files (.md, .markdown) and folders can be added to a collection."
+            )
         }
     }
 }
@@ -170,6 +179,7 @@ struct FolderPinRow: View {
     let item: PinnedItem
     let collectionID: PinnedCollection.ID
     @Binding var openedFile: URL?
+    @Environment(ErrorPresenter.self) private var errorPresenter: ErrorPresenter?
 
     @State private var isExpanded = false
     @State private var children: [URL] = []
@@ -204,10 +214,7 @@ struct FolderPinRow: View {
             if isExpanded { Task { await load() } }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "folder")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(item.displayName)
+                Label(item.displayName, systemImage: "folder")
                     .font(.system(.subheadline, design: .rounded))
                     .lineLimit(1)
                 Spacer()
@@ -275,11 +282,16 @@ struct FolderPinRow: View {
     /// security scope, so we briefly activate it, mint a security-scoped bookmark
     /// for the child (registered with BookmarkManager), then open via the normal flow.
     private func open(_ childURL: URL) {
-        if let dir = pinboard.resolveURL(for: item) {
-            let accessed = dir.startAccessingSecurityScopedResource()
-            defer { if accessed { dir.stopAccessingSecurityScopedResource() } }
-            BookmarkManager.saveBookmark(for: childURL)
+        guard let dir = pinboard.resolveURL(for: item) else {
+            errorPresenter?.present(
+                "Folder Unavailable",
+                "“\(item.displayName)” may have been moved or deleted."
+            )
+            return
         }
+        let accessed = dir.startAccessingSecurityScopedResource()
+        defer { if accessed { dir.stopAccessingSecurityScopedResource() } }
+        BookmarkManager.saveBookmark(for: childURL)
         openedFile = childURL
     }
 }

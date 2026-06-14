@@ -108,7 +108,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
             context.coordinator.lastSpacing = spacing
             context.coordinator.lastResolvedAppearance = resolvedAppearance
             
-            context.coordinator.pendingScrollOrigin = webView.descendantScrollView?.contentView.bounds.origin
+            context.coordinator.pendingScrollOrigin = context.coordinator.resolvedScrollView(in: webView)?.contentView.bounds.origin
             context.coordinator.allowNextMainFrameLoad = true
             webView.loadHTMLString(html, baseURL: nil)
 
@@ -212,8 +212,18 @@ struct MarkdownPreviewView: NSViewRepresentable {
         var lastResolvedAppearance: MarkdownAppearance?
         var allowNextMainFrameLoad = false
         var pendingScrollOrigin: NSPoint?
+        // Cached so we don't recursively walk the WKWebView subtree twice per load.
+        // Weak: if WebKit tears its internal scroll view down we re-resolve transparently.
+        weak var cachedScrollView: NSScrollView?
 
         fileprivate var searchDebouncer = Debouncer(duration: .milliseconds(150))
+
+        func resolvedScrollView(in webView: WKWebView) -> NSScrollView? {
+            if let cachedScrollView { return cachedScrollView }
+            let resolved = webView.descendantScrollView
+            cachedScrollView = resolved
+            return resolved
+        }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "copyCode", let codeString = message.body as? String {
@@ -318,7 +328,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 return
             }
             self.pendingScrollOrigin = nil
-            guard let scrollView = webView.descendantScrollView else {
+            guard let scrollView = resolvedScrollView(in: webView) else {
                 return
             }
             scrollView.contentView.scroll(to: pendingScrollOrigin)
@@ -334,6 +344,7 @@ func debouncedHighlightSearch(in webView: WKWebView, text: String) {
             (function() {
                 var query = '\(escaped)';
                 if (!query || query.length < 2) return;
+                var lowerQuery = query.toLowerCase();
 
                 // Remove existing highlights
                 var existing = document.querySelectorAll('.search-highlight');
@@ -362,7 +373,7 @@ func debouncedHighlightSearch(in webView: WKWebView, text: String) {
                 while (node = walker.nextNode()) {
                     var parent = node.parentNode;
                     if (parent && (parent.tagName === 'MARK' || parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE')) continue;
-                    if (node.nodeValue.toLowerCase().includes(query.toLowerCase())) {
+                    if (node.nodeValue.toLowerCase().includes(lowerQuery)) {
                         nodes.push(node);
                     }
                 }
@@ -372,7 +383,7 @@ func debouncedHighlightSearch(in webView: WKWebView, text: String) {
                 nodes.forEach(function(textNode) {
                     var text = textNode.nodeValue;
                     var lower = text.toLowerCase();
-                    var idx = lower.indexOf(query.toLowerCase());
+                    var idx = lower.indexOf(lowerQuery);
                     var frag = document.createDocumentFragment();
                     var last = 0;
                     while (idx !== -1) {
@@ -384,7 +395,7 @@ func debouncedHighlightSearch(in webView: WKWebView, text: String) {
                         mark.appendChild(document.createTextNode(text.substring(idx, idx + query.length)));
                         frag.appendChild(mark);
                         last = idx + query.length;
-                        idx = lower.indexOf(query.toLowerCase(), last);
+                        idx = lower.indexOf(lowerQuery, last);
                     }
                     frag.appendChild(document.createTextNode(text.substring(last)));
                     textNode.parentNode.replaceChild(frag, textNode);

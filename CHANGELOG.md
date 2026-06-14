@@ -10,6 +10,9 @@ All notable changes to PeekMark will be documented in this file.
 - `nonisolated(unsafe)` annotations for QuickLook extension Sendable conformance
 - `@MainActor` isolation on `MarkdownAppearance.resolved`
 - `OSAllocatedUnfairLock` for thread-safe continuation completion
+- Graceful error alerts when a recent or pinned folder source can no longer be opened (moved or deleted), instead of a silent no-op
+- Graceful feedback when a non-Markdown file or folder is dropped on the reading area or a collection
+- Recent Documents list now holds up to 10 items (was 5)
 
 ### Fixed
 - Search highlighting JS: `queryLower` → `query.toLowerCase()` undefined variable
@@ -18,6 +21,12 @@ All notable changes to PeekMark will be documented in this file.
 - Mermaid `securityLevel` changed to `strict` (was `'loose'`)
 - QuickLook extension compile warnings for NSAppearance cross-thread capture
 - `evaluateJavaScript` callback/deprecation warnings
+- Document-info popover no longer renders Liquid Glass on top of the popover's own glass
+- Thread-safe CSS cache (`OSAllocatedUnfairLock`) — fixes a data race under rapid document/style switches
+- Pinned files now re-mint stale security-scoped bookmarks, so pinned access no longer silently decays over time / OS updates
+- Recent documents now carry their own security-scoped bookmark and reliably reopen after relaunch (previously they could silently break)
+- Adding a recent to a collection now succeeds (the file's security scope is held while the pin is created)
+- Pinned-folder rows now align with file rows in the sidebar
 
 ### Changed
 - CSP tightened while retaining the CDN allowlist required by the current renderer
@@ -25,6 +34,9 @@ All notable changes to PeekMark will be documented in this file.
 - Default packaged build configuration: `Release`
 - Rewrote `openwith_ui_check.sh` for current UI patterns
 - Cleaned install/uninstall scripts (removed internal logging references)
+- Typography/appearance changes update the preview incrementally instead of rebuilding the full themed HTML on the main thread — smoother font-size slider on large documents
+- Security scope is released immediately after the file read rather than held across rendering
+- Vendor scripts (Highlight.js / KaTeX / Mermaid) are escaped once at load instead of on every render
 
 ### Removed
 - Internal docs from tracking (`PeekMark.xcodeproj/` gitignored)
