@@ -251,6 +251,14 @@ struct ContentView: View {
         let isDirectory = (try? standardizedURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         let ext = standardizedURL.pathExtension.lowercased()
         guard !isDirectory, ext == "md" || ext == "markdown" else {
+            await MainActor.run {
+                errorPresenter.present(
+                    "Can’t Open This Item",
+                    isDirectory
+                        ? "Drop a folder onto a collection in the sidebar to pin it, then open files from there."
+                        : "Only Markdown files (.md, .markdown) can be opened."
+                )
+            }
             return false
         }
         BookmarkManager.saveBookmark(for: standardizedURL)

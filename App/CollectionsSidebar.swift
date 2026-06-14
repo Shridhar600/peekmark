@@ -11,6 +11,7 @@ struct CollectionDisclosure: View {
     @Binding var openedFile: URL?
     let onRename: () -> Void
     let onDelete: () -> Void
+    @Environment(ErrorPresenter.self) private var errorPresenter: ErrorPresenter?
 
     var body: some View {
         Group {
@@ -89,20 +90,28 @@ struct CollectionDisclosure: View {
     @MainActor
     private func pinDroppedFiles(_ providers: [NSItemProvider]) async {
         let urls = await FileDropSupport.loadFileURLs(from: providers)
+        var pinnedCount = 0
+        var rejectedCount = 0
         for url in urls {
             let std = url.standardizedFileURL
             let isDirectory = (try? std.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             if isDirectory {
                 // Folder source: the pinboard stores its own security-scoped
                 // folder bookmark (used later to enumerate + open children).
-                try? pinboard.pin(std, kind: .folder, to: collection.id)
+                do { try pinboard.pin(std, kind: .folder, to: collection.id); pinnedCount += 1 } catch { rejectedCount += 1 }
             } else {
                 let ext = std.pathExtension.lowercased()
-                guard ext == "md" || ext == "markdown" else { continue }
+                guard ext == "md" || ext == "markdown" else { rejectedCount += 1; continue }
                 // File: register with BookmarkManager so the existing open flow resolves it.
                 BookmarkManager.saveBookmark(for: std)
-                try? pinboard.pin(std, kind: .file, to: collection.id)
+                do { try pinboard.pin(std, kind: .file, to: collection.id); pinnedCount += 1 } catch { rejectedCount += 1 }
             }
+        }
+        if pinnedCount == 0 && rejectedCount > 0 {
+            errorPresenter?.present(
+                "Nothing Added",
+                "Only Markdown files (.md, .markdown) and folders can be added to a collection."
+            )
         }
     }
 }
