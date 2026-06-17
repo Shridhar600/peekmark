@@ -121,8 +121,9 @@ struct SidebarView: View {
         guard let url = recents.resolveURL(for: document) else {
             errorPresenter?.present(
                 "Can’t Open Document",
-                "“\(displayName(of: document))” may have been moved or deleted."
+                "“\(displayName(of: document))” may have been moved or deleted. It’s been removed from Recent Documents."
             )
+            recents.remove(document)
             return
         }
         BookmarkManager.saveBookmark(for: url)
@@ -136,8 +137,9 @@ struct SidebarView: View {
         guard let url = recents.resolveURL(for: document) else {
             errorPresenter?.present(
                 "Can’t Add to Collection",
-                "“\(displayName(of: document))” may have been moved or deleted."
+                "“\(displayName(of: document))” may have been moved or deleted. It’s been removed from Recent Documents."
             )
+            recents.remove(document)
             return
         }
         let accessed = url.startAccessingSecurityScopedResource()

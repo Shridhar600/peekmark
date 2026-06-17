@@ -78,6 +78,11 @@ final class RecentDocumentsStore {
         persist()
     }
 
+    func remove(_ document: RecentDocument) {
+        documents.removeAll { $0.id == document.id }
+        persist()
+    }
+
     /// Resolves a recent's bookmark to a usable URL (the caller owns the
     /// `startAccessingSecurityScopedResource()` / `stop…`), re-minting and
     /// persisting if the bookmark went stale. Returns nil if unresolvable.

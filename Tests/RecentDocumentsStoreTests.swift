@@ -50,6 +50,15 @@ final class RecentDocumentsStoreTests: XCTestCase {
         XCTAssertTrue(store.documents.isEmpty)
     }
 
+    func testRemoveDropsOnlyThatEntry() throws {
+        let (store, _) = makeStore()
+        store.add(url: fileURL("/docs/a.md"))
+        store.add(url: fileURL("/docs/b.md"))
+        let target = try XCTUnwrap(store.documents.first { $0.path == "/docs/a.md" })
+        store.remove(target)
+        XCTAssertEqual(store.documents.map(\.path), ["/docs/b.md"])
+    }
+
     func testPersistsAcrossReload() {
         let suite = UUID().uuidString
         let (store, defaults) = makeStore(suite: suite)
