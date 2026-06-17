@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var state = MarkdownPreviewState()
     @State private var pinboard = PinboardStore()
     @State private var errorPresenter = ErrorPresenter()
+    @State private var fileWatcher = FileWatcher()
     @State private var selection: SidebarItem? = .preview
     @State private var searchText = ""
     @State private var scrollToHeaderIndex: Int?
@@ -29,6 +30,7 @@ struct ContentView: View {
     @AppStorage("previewSpacing") private var selectedSpacing: PreviewSpacing = .compact
     @AppStorage("previewFontSize") private var selectedFontSize: Double = 14.5
     @AppStorage("previewAppearance") private var selectedAppearance: MarkdownAppearance = .system
+    @AppStorage("autoRefreshEnabled") private var autoRefreshEnabled = true
     @Environment(\.colorScheme) private var colorScheme
 
     private struct StyleSettings: Equatable {
@@ -145,6 +147,12 @@ struct ContentView: View {
         .onChange(of: styleSettings) { _, _ in
             updateStyle()
         }
+        .onChange(of: autoRefreshEnabled) { _, enabled in
+            // Turning auto-refresh back on should immediately pick up any edits made
+            // while it was off.
+            if enabled { reloadCurrentDocument() }
+            startWatchingIfEnabled()
+        }
         .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
             Task {
                 _ = await loadDroppedFile(from: providers)
@@ -219,11 +227,13 @@ struct ContentView: View {
     private func loadOpenedFile() {
         guard let openedFile else {
             state.clear()
+            fileWatcher.stop()
             return
         }
         let standardizedURL = openedFile.standardizedFileURL
         let targetURL = BookmarkManager.resolveBookmark(for: standardizedURL) ?? standardizedURL
         state.load(url: targetURL, appearance: selectedAppearance, font: selectedFont, fontSize: selectedFontSize, spacing: selectedSpacing)
+        startWatchingIfEnabled()
         
         // Re-opening a doc already in recents keeps its position (no reshuffle under
         // the cursor); new docs go to the top.
@@ -234,6 +244,27 @@ struct ContentView: View {
                 self.openedFile = standardizedURL
             }
         }
+    }
+
+    /// (Re)starts the file watcher for the open document when auto-refresh is on,
+    /// or tears it down otherwise. Re-runs whenever the open file or the toggle changes.
+    private func startWatchingIfEnabled() {
+        guard autoRefreshEnabled, let openedFile else {
+            fileWatcher.stop()
+            return
+        }
+        let resolved = BookmarkManager.resolveBookmark(for: openedFile.standardizedFileURL) ?? openedFile.standardizedFileURL
+        fileWatcher.start(watching: resolved) {
+            reloadCurrentDocument()
+        }
+    }
+
+    /// Re-reads and re-renders the open document after an external edit. The webview
+    /// only reloads when the rendered HTML actually changed, and preserves scroll.
+    private func reloadCurrentDocument() {
+        guard let openedFile else { return }
+        let resolved = BookmarkManager.resolveBookmark(for: openedFile.standardizedFileURL) ?? openedFile.standardizedFileURL
+        state.load(url: resolved, appearance: selectedAppearance, font: selectedFont, fontSize: selectedFontSize, spacing: selectedSpacing)
     }
 
     private func loadDroppedFile(from providers: [NSItemProvider]) async -> Bool {
