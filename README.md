@@ -21,7 +21,7 @@
   <img src="Assets/peekmark-quicklook.gif" width="48%" alt="Finder Quick Look preview">
 </p>
 
-Open `.md` files in Finder with **Space** to get a clean, sandboxed Quick Look preview, or launch PeekMark for the full reading experience with dynamic typography, in-document search, and a sidebar organizer — pin files and whole folders into named collections, alongside recents. Math, diagrams, code, and footnotes render locally — no network, no tracking.
+Press **Space** on any `.md` in Finder for a clean, sandboxed Quick Look preview. Or open the PeekMark app for the full reading experience: dynamic typography, in-document search, and a **live preview that updates as you edit in your own editor**. Organize with a sidebar that pins files and whole folders into named collections, right next to your recents. Math, diagrams, code, and footnotes all render locally. No network, no tracking.
 
 ## Quick Start
 
