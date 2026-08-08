@@ -54,6 +54,31 @@ struct MarkdownPreviewView: NSViewRepresentable {
         // Register the script message handler for copying code
         let contentController = WKUserContentController()
         contentController.add(context.coordinator, name: "copyCode")
+
+        // Report the page's scroll position (rAF-throttled) so we can restore it
+        // across a same-document reload — the AppKit clip view doesn't track
+        // WKWebView's internal scrolling reliably.
+        contentController.add(context.coordinator, name: "scrollPosition")
+        // Fired once the post-reload scroll restore has settled, so the snapshot
+        // overlay that hides the reload flash can be removed at the right moment.
+        contentController.add(context.coordinator, name: "scrollRestored")
+        contentController.addUserScript(WKUserScript(
+            source: """
+            (function(){
+              var pending = false;
+              window.addEventListener('scroll', function(){
+                if (pending) return;
+                pending = true;
+                requestAnimationFrame(function(){
+                  pending = false;
+                  try { window.webkit.messageHandlers.scrollPosition.postMessage(window.scrollY); } catch (e) {}
+                });
+              }, { passive: true });
+            })();
+            """,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        ))
         configuration.userContentController = contentController
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -97,9 +122,18 @@ struct MarkdownPreviewView: NSViewRepresentable {
         }
 
         let appearanceChanged = context.coordinator.lastResolvedAppearance != resolvedAppearance
-        let bodyChanged = context.coordinator.lastBodyHTML != bodyHTML || context.coordinator.lastSearchText != searchText
-        
-        if bodyChanged {
+        // Only an actual content change reloads the page. A search-text change just
+        // re-runs the highlighter in place (else branch) — reloading for search
+        // flashed the document to the top on every keystroke.
+        let contentChanged = context.coordinator.lastBodyHTML != bodyHTML
+
+        if contentChanged {
+            // Preserve scroll only for a same-document re-render with no active search
+            // — i.e. an external edit picked up by auto-refresh. A document switch
+            // starts at the top; a search lets the highlighter scroll to its match.
+            let isSameDocument = context.coordinator.lastDocumentTitle == documentTitle
+            let preserveScroll = isSameDocument && searchText.isEmpty
+            context.coordinator.lastDocumentTitle = documentTitle
             context.coordinator.lastBodyHTML = bodyHTML
             context.coordinator.lastHTML = html
             context.coordinator.lastSearchText = searchText
@@ -107,18 +141,33 @@ struct MarkdownPreviewView: NSViewRepresentable {
             context.coordinator.lastFontSize = fontSize
             context.coordinator.lastSpacing = spacing
             context.coordinator.lastResolvedAppearance = resolvedAppearance
-            
-            context.coordinator.pendingScrollOrigin = context.coordinator.resolvedScrollView(in: webView)?.contentView.bounds.origin
+
+            context.coordinator.pendingScrollY = preserveScroll ? context.coordinator.lastKnownScrollY : nil
             context.coordinator.allowNextMainFrameLoad = true
-            webView.loadHTMLString(html, baseURL: nil)
+            if preserveScroll {
+                // Hide the navigation's repaint-at-top behind a frozen snapshot until
+                // the scroll is restored (then the overlay fades out).
+                context.coordinator.beginSnapshotReload(on: webView) {
+                    webView.loadHTMLString(html, baseURL: nil)
+                }
+            } else {
+                context.coordinator.removeSnapshotOverlay()
+                webView.loadHTMLString(html, baseURL: nil)
+            }
 
             if !searchText.isEmpty {
                 context.coordinator.debouncedHighlightSearch(in: webView, text: self.searchText)
             }
         } else {
+            // Re-highlight in place when only the search text changed — no reload.
+            if context.coordinator.lastSearchText != searchText {
+                context.coordinator.lastSearchText = searchText
+                context.coordinator.debouncedHighlightSearch(in: webView, text: searchText)
+            }
+
             var fontVarsChanged = false
             var appearanceVarsChanged = false
-            
+
             if context.coordinator.lastFontSize != fontSize || context.coordinator.lastFont != font || context.coordinator.lastSpacing != spacing {
                 context.coordinator.lastFont = font
                 context.coordinator.lastFontSize = fontSize
@@ -210,19 +259,66 @@ struct MarkdownPreviewView: NSViewRepresentable {
         var lastFontSize: Double?
         var lastSpacing: PreviewSpacing?
         var lastResolvedAppearance: MarkdownAppearance?
+        var lastDocumentTitle: String?
         var allowNextMainFrameLoad = false
-        var pendingScrollOrigin: NSPoint?
-        // Cached so we don't recursively walk the WKWebView subtree twice per load.
-        // Weak: if WebKit tears its internal scroll view down we re-resolve transparently.
-        weak var cachedScrollView: NSScrollView?
+        /// Live scroll offset reported by the injected scroll listener (the AppKit
+        /// clip view doesn't track WKWebView's internal scrolling reliably).
+        var lastKnownScrollY: CGFloat = 0
+        /// Captured just before a same-document reload so didFinish can restore it.
+        var pendingScrollY: CGFloat?
+        /// A frozen snapshot of the previous frame, shown over the webview during a
+        /// same-document reload to hide WKWebView's repaint-at-top flash. Removed when
+        /// the scroll restore settles (or a safety timeout fires).
+        var snapshotOverlay: NSImageView?
+        var snapshotTimeout: Task<Void, Never>?
 
         fileprivate var searchDebouncer = Debouncer(duration: .milliseconds(150))
 
-        func resolvedScrollView(in webView: WKWebView) -> NSScrollView? {
-            if let cachedScrollView { return cachedScrollView }
-            let resolved = webView.descendantScrollView
-            cachedScrollView = resolved
-            return resolved
+        /// Snapshots the current webview frame, overlays it, then runs `reload`. The
+        /// overlay hides the navigation's repaint-at-top until the scroll is restored
+        /// (the `scrollRestored` message) or a safety timeout fires.
+        func beginSnapshotReload(on webView: WKWebView, reload: @escaping () -> Void) {
+            let config = WKSnapshotConfiguration()
+            config.afterScreenUpdates = false
+            webView.takeSnapshot(with: config) { [weak self, weak webView] image, _ in
+                guard let self, let webView else { reload(); return }
+                if let image {
+                    self.removeSnapshotOverlay()
+                    let overlay = NSImageView(frame: webView.bounds)
+                    overlay.image = image
+                    overlay.imageScaling = .scaleAxesIndependently
+                    overlay.autoresizingMask = [.width, .height]
+                    webView.addSubview(overlay)
+                    self.snapshotOverlay = overlay
+                    self.snapshotTimeout?.cancel()
+                    self.snapshotTimeout = Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(1))
+                        guard !Task.isCancelled else { return }
+                        self?.fadeOutSnapshotOverlay()
+                    }
+                }
+                reload()
+            }
+        }
+
+        func fadeOutSnapshotOverlay() {
+            snapshotTimeout?.cancel()
+            snapshotTimeout = nil
+            guard let overlay = snapshotOverlay else { return }
+            snapshotOverlay = nil
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.12
+                overlay.animator().alphaValue = 0
+            }, completionHandler: {
+                overlay.removeFromSuperview()
+            })
+        }
+
+        func removeSnapshotOverlay() {
+            snapshotTimeout?.cancel()
+            snapshotTimeout = nil
+            snapshotOverlay?.removeFromSuperview()
+            snapshotOverlay = nil
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -234,6 +330,10 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
                 pasteboard.setString(codeString, forType: .string)
+            } else if message.name == "scrollPosition", let y = message.body as? Double {
+                lastKnownScrollY = CGFloat(y)
+            } else if message.name == "scrollRestored" {
+                fadeOutSnapshotOverlay()
             }
         }
 
@@ -324,15 +424,22 @@ struct MarkdownPreviewView: NSViewRepresentable {
             """
             webView.evaluateJavaScript(script, completionHandler: nil)
 
-            guard let pendingScrollOrigin else {
+            let targetY = self.pendingScrollY
+            self.pendingScrollY = nil
+            guard let targetY, targetY > 0.5 else {
+                // Nothing to restore (new document, or already at the top) — drop any
+                // snapshot overlay right away.
+                fadeOutSnapshotOverlay()
                 return
             }
-            self.pendingScrollOrigin = nil
-            guard let scrollView = resolvedScrollView(in: webView) else {
-                return
-            }
-            scrollView.contentView.scroll(to: pendingScrollOrigin)
-            scrollView.reflectScrolledClipView(scrollView.contentView)
+            // Restore the pre-reload scroll position. Async content (highlight.js /
+            // KaTeX / Mermaid) keeps growing the page after didFinish, so re-assert
+            // via JS until the page is tall enough (or give up after ~30 frames), then
+            // signal so the snapshot overlay can fade out.
+            let restore = """
+            (function(){var y=\(targetY),n=0;function r(){window.scrollTo(0,y);n++;if(n<30&&window.pageYOffset<y-1){requestAnimationFrame(r);}else{try{window.webkit.messageHandlers.scrollRestored.postMessage(1);}catch(e){}}}r();})();
+            """
+            webView.evaluateJavaScript(restore, completionHandler: nil)
         }
 
 func debouncedHighlightSearch(in webView: WKWebView, text: String) {
@@ -343,67 +450,53 @@ func debouncedHighlightSearch(in webView: WKWebView, text: String) {
             let script = """
             (function() {
                 var query = '\(escaped)';
-                if (!query || query.length < 2) return;
-                var lowerQuery = query.toLowerCase();
+                if (typeof CSS === 'undefined' || !CSS.highlights || typeof Highlight === 'undefined') return;
 
-                // Remove existing highlights
-                var existing = document.querySelectorAll('.search-highlight');
-                existing.forEach(function(el) {
-                    var parent = el.parentNode;
-                    while (el.firstChild) parent.insertBefore(el.firstChild, el);
-                    parent.removeChild(el);
-                });
+                // Range-based highlighting via the CSS Custom Highlight API. It never
+                // mutates the DOM, so text nodes are never split — re-searching a
+                // longer query (e.g. "sub" then "subagent") keeps matching, unlike the
+                // old <mark>-wrapping approach which fragmented the text.
+                var hl = window.__peekSearchHighlight;
+                if (!hl) {
+                    hl = new Highlight();
+                    window.__peekSearchHighlight = hl;
+                    CSS.highlights.set('peek-search', hl);
+                }
+                hl.clear();
 
-                if (!document.getElementById('search-highlight-style')) {
+                if (!document.getElementById('peek-search-style')) {
                     var style = document.createElement('style');
-                    style.id = 'search-highlight-style';
-                    style.textContent = '.search-highlight { background-color: #ffd60a; color: #000; padding: 0 2px; border-radius: 2px; }';
+                    style.id = 'peek-search-style';
+                    style.textContent = '::highlight(peek-search){ background-color: #ffd60a; color: #000; }';
                     document.head.appendChild(style);
                 }
 
-                // Find and highlight matches
-                var walker = document.createTreeWalker(
-                    document.body,
-                    NodeFilter.SHOW_TEXT,
-                    null,
-                    false
-                );
-                var nodes = [];
-                var node;
+                if (!query || query.length < 2) return;
+                var lowerQuery = query.toLowerCase();
+                var qlen = query.length;
+
+                var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+                var node, firstRange = null;
                 while (node = walker.nextNode()) {
                     var parent = node.parentNode;
-                    if (parent && (parent.tagName === 'MARK' || parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE')) continue;
-                    if (node.nodeValue.toLowerCase().includes(lowerQuery)) {
-                        nodes.push(node);
+                    if (parent && (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE')) continue;
+                    var hay = node.nodeValue.toLowerCase();
+                    var idx = hay.indexOf(lowerQuery);
+                    while (idx !== -1) {
+                        var range = document.createRange();
+                        range.setStart(node, idx);
+                        range.setEnd(node, idx + qlen);
+                        hl.add(range);
+                        if (!firstRange) firstRange = range;
+                        idx = hay.indexOf(lowerQuery, idx + qlen);
                     }
                 }
 
-                if (nodes.length === 0) return;
-
-                nodes.forEach(function(textNode) {
-                    var text = textNode.nodeValue;
-                    var lower = text.toLowerCase();
-                    var idx = lower.indexOf(lowerQuery);
-                    var frag = document.createDocumentFragment();
-                    var last = 0;
-                    while (idx !== -1) {
-                        if (idx > last) {
-                            frag.appendChild(document.createTextNode(text.substring(last, idx)));
-                        }
-                        var mark = document.createElement('mark');
-                        mark.className = 'search-highlight';
-                        mark.appendChild(document.createTextNode(text.substring(idx, idx + query.length)));
-                        frag.appendChild(mark);
-                        last = idx + query.length;
-                        idx = lower.indexOf(lowerQuery, last);
-                    }
-                    frag.appendChild(document.createTextNode(text.substring(last)));
-                    textNode.parentNode.replaceChild(frag, textNode);
-                });
-
-                // Scroll to first match
-                var first = document.querySelector('.search-highlight');
-                if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (firstRange) {
+                    var rect = firstRange.getBoundingClientRect();
+                    var target = window.scrollY + rect.top - (window.innerHeight / 2);
+                    window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+                }
             })();
             """
 
@@ -415,19 +508,5 @@ func debouncedHighlightSearch(in webView: WKWebView, text: String) {
         private func searchHighlightEvaluate(_ script: String, in webView: WKWebView?) {
             webView?.evaluateJavaScript(script, completionHandler: nil)
         }
-    }
-}
-
-private extension NSView {
-    var descendantScrollView: NSScrollView? {
-        if let scrollView = self as? NSScrollView {
-            return scrollView
-        }
-        for subview in subviews {
-            if let scrollView = subview.descendantScrollView {
-                return scrollView
-            }
-        }
-        return nil
     }
 }

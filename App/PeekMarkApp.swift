@@ -32,6 +32,7 @@ final class PeekMarkAppDelegate: NSObject, NSApplicationDelegate {
 struct PeekMarkApp: App {
     @NSApplicationDelegateAdaptor(PeekMarkAppDelegate.self) private var appDelegate
     @State private var openedFile: URL?
+    @AppStorage("autoRefreshEnabled") private var autoRefreshEnabled = true
 
     var body: some Scene {
         WindowGroup {
@@ -52,6 +53,9 @@ struct PeekMarkApp: App {
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandGroup(after: .sidebar) {
+                Toggle("Auto-Refresh Preview", isOn: $autoRefreshEnabled)
+            }
         }
     }
 
