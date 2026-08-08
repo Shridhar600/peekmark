@@ -59,6 +59,9 @@ struct MarkdownPreviewView: NSViewRepresentable {
         // across a same-document reload — the AppKit clip view doesn't track
         // WKWebView's internal scrolling reliably.
         contentController.add(context.coordinator, name: "scrollPosition")
+        // Fired once the post-reload scroll restore has settled, so the snapshot
+        // overlay that hides the reload flash can be removed at the right moment.
+        contentController.add(context.coordinator, name: "scrollRestored")
         contentController.addUserScript(WKUserScript(
             source: """
             (function(){
@@ -141,7 +144,16 @@ struct MarkdownPreviewView: NSViewRepresentable {
 
             context.coordinator.pendingScrollY = preserveScroll ? context.coordinator.lastKnownScrollY : nil
             context.coordinator.allowNextMainFrameLoad = true
-            webView.loadHTMLString(html, baseURL: nil)
+            if preserveScroll {
+                // Hide the navigation's repaint-at-top behind a frozen snapshot until
+                // the scroll is restored (then the overlay fades out).
+                context.coordinator.beginSnapshotReload(on: webView) {
+                    webView.loadHTMLString(html, baseURL: nil)
+                }
+            } else {
+                context.coordinator.removeSnapshotOverlay()
+                webView.loadHTMLString(html, baseURL: nil)
+            }
 
             if !searchText.isEmpty {
                 context.coordinator.debouncedHighlightSearch(in: webView, text: self.searchText)
@@ -254,8 +266,60 @@ struct MarkdownPreviewView: NSViewRepresentable {
         var lastKnownScrollY: CGFloat = 0
         /// Captured just before a same-document reload so didFinish can restore it.
         var pendingScrollY: CGFloat?
+        /// A frozen snapshot of the previous frame, shown over the webview during a
+        /// same-document reload to hide WKWebView's repaint-at-top flash. Removed when
+        /// the scroll restore settles (or a safety timeout fires).
+        var snapshotOverlay: NSImageView?
+        var snapshotTimeout: Task<Void, Never>?
 
         fileprivate var searchDebouncer = Debouncer(duration: .milliseconds(150))
+
+        /// Snapshots the current webview frame, overlays it, then runs `reload`. The
+        /// overlay hides the navigation's repaint-at-top until the scroll is restored
+        /// (the `scrollRestored` message) or a safety timeout fires.
+        func beginSnapshotReload(on webView: WKWebView, reload: @escaping () -> Void) {
+            let config = WKSnapshotConfiguration()
+            config.afterScreenUpdates = false
+            webView.takeSnapshot(with: config) { [weak self, weak webView] image, _ in
+                guard let self, let webView else { reload(); return }
+                if let image {
+                    self.removeSnapshotOverlay()
+                    let overlay = NSImageView(frame: webView.bounds)
+                    overlay.image = image
+                    overlay.imageScaling = .scaleAxesIndependently
+                    overlay.autoresizingMask = [.width, .height]
+                    webView.addSubview(overlay)
+                    self.snapshotOverlay = overlay
+                    self.snapshotTimeout?.cancel()
+                    self.snapshotTimeout = Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(1))
+                        guard !Task.isCancelled else { return }
+                        self?.fadeOutSnapshotOverlay()
+                    }
+                }
+                reload()
+            }
+        }
+
+        func fadeOutSnapshotOverlay() {
+            snapshotTimeout?.cancel()
+            snapshotTimeout = nil
+            guard let overlay = snapshotOverlay else { return }
+            snapshotOverlay = nil
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.12
+                overlay.animator().alphaValue = 0
+            }, completionHandler: {
+                overlay.removeFromSuperview()
+            })
+        }
+
+        func removeSnapshotOverlay() {
+            snapshotTimeout?.cancel()
+            snapshotTimeout = nil
+            snapshotOverlay?.removeFromSuperview()
+            snapshotOverlay = nil
+        }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "copyCode", let codeString = message.body as? String {
@@ -268,6 +332,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 pasteboard.setString(codeString, forType: .string)
             } else if message.name == "scrollPosition", let y = message.body as? Double {
                 lastKnownScrollY = CGFloat(y)
+            } else if message.name == "scrollRestored" {
+                fadeOutSnapshotOverlay()
             }
         }
 
@@ -358,16 +424,20 @@ struct MarkdownPreviewView: NSViewRepresentable {
             """
             webView.evaluateJavaScript(script, completionHandler: nil)
 
-            guard let pendingScrollY, pendingScrollY > 0.5 else {
-                self.pendingScrollY = nil
+            let targetY = self.pendingScrollY
+            self.pendingScrollY = nil
+            guard let targetY, targetY > 0.5 else {
+                // Nothing to restore (new document, or already at the top) — drop any
+                // snapshot overlay right away.
+                fadeOutSnapshotOverlay()
                 return
             }
-            self.pendingScrollY = nil
             // Restore the pre-reload scroll position. Async content (highlight.js /
             // KaTeX / Mermaid) keeps growing the page after didFinish, so re-assert
-            // via JS until the page is tall enough (or give up after ~30 frames).
+            // via JS until the page is tall enough (or give up after ~30 frames), then
+            // signal so the snapshot overlay can fade out.
             let restore = """
-            (function(){var y=\(pendingScrollY),n=0;function r(){window.scrollTo(0,y);n++;if(n<30&&window.pageYOffset<y-1){requestAnimationFrame(r);}}r();})();
+            (function(){var y=\(targetY),n=0;function r(){window.scrollTo(0,y);n++;if(n<30&&window.pageYOffset<y-1){requestAnimationFrame(r);}else{try{window.webkit.messageHandlers.scrollRestored.postMessage(1);}catch(e){}}}r();})();
             """
             webView.evaluateJavaScript(restore, completionHandler: nil)
         }
