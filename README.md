@@ -46,6 +46,7 @@ To uninstall: `./script/uninstall.sh`.
 - **Dual entry points** — Quick Look preview from Finder, or the standalone reader app.
 - **Dynamic typography** — font family (System, Serif, Monospace, Rounded), size, and line spacing adjust live.
 - **In-document search** — full-text search with highlight and scroll-to-match.
+- **Live auto-refresh** — edit the file in any editor and the preview updates automatically, keeping your scroll position (toggle in the **View** menu).
 
 ### 🎨 Rendering fidelity
 - **GitHub-Flavored Markdown** — tables, task lists, footnotes, strikethrough, autolinks.

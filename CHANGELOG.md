@@ -13,6 +13,7 @@ All notable changes to PeekMark will be documented in this file.
 - Graceful error alerts when a recent or pinned folder source can no longer be opened (moved or deleted), instead of a silent no-op
 - Graceful feedback when a non-Markdown file or folder is dropped on the reading area or a collection
 - Recent Documents list now holds up to 10 items (was 5)
+- Live auto-refresh — the preview updates automatically when the open document is edited in another app (toggle in **View ▸ Auto-Refresh Preview**, on by default)
 
 ### Fixed
 - Search highlighting JS: `queryLower` → `query.toLowerCase()` undefined variable
@@ -27,6 +28,10 @@ All notable changes to PeekMark will be documented in this file.
 - Recent documents now carry their own security-scoped bookmark and reliably reopen after relaunch (previously they could silently break)
 - Adding a recent to a collection now succeeds (the file's security scope is held while the pin is created)
 - Pinned-folder rows now align with file rows in the sidebar
+- Emptying the open file now clears the preview to the empty state (the file watcher was missing size-only changes)
+- In-document search keeps matching when a query is extended (e.g. `sub` → `subagent`); highlighting no longer mutates the DOM
+- Scroll position is preserved when the preview reloads after an external edit (was jumping to the top)
+- A recent that can no longer be opened is removed from the list instead of lingering
 
 ### Changed
 - CSP tightened while retaining the CDN allowlist required by the current renderer
@@ -37,6 +42,7 @@ All notable changes to PeekMark will be documented in this file.
 - Typography/appearance changes update the preview incrementally instead of rebuilding the full themed HTML on the main thread — smoother font-size slider on large documents
 - Security scope is released immediately after the file read rather than held across rendering
 - Vendor scripts (Highlight.js / KaTeX / Mermaid) are escaped once at load instead of on every render
+- In-document search highlights via the CSS Custom Highlight API (Range-based, no DOM mutation) instead of re-rendering the page on each keystroke
 
 ### Removed
 - Internal docs from tracking (`PeekMark.xcodeproj/` gitignored)
